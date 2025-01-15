@@ -141,7 +141,8 @@ class SlotBooking(Base):
     appointment_id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("patients.patient_id"))
     availability_id: Mapped[int] = mapped_column(ForeignKey("operators_availability.availability_id"), nullable=False)
-    appointment_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    appointment_datetime_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    appointment_datetime_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     rejected: Mapped[bool] = mapped_column(Boolean, default=False)
 
     def __repr__(self) -> str:

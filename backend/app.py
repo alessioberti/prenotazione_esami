@@ -1,7 +1,7 @@
-from flask import Flask, Blueprint, request, jsonify
+from flask import Flask, request, jsonify
 from datetime import date, datetime, time, timedelta
 from sqlalchemy.orm import Session
-from database import engine, OperatorsAvailability, Operator, Laboratory
+from database import engine, OperatorsAvailability, Operator, Laboratory, ExamType, SlotBooking
 import logging
 app = Flask(__name__)
 
@@ -74,38 +74,62 @@ def get_slots_availability():
     first_reservation_datetime = datetime.combine(datetime.now().date() + timedelta(days=1), time(0, 6))
     if datetime_from_filter:
         try:
-            # Recupera la data di partenza delle disponibilità richiesta dall'utente e rimuovi l'ora
-            datetime_from_filter = datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S').date()
-            if datetime_from_filter.date() <= datetime.now().date():
-                datetime_from_filter = first_reservation_datetime
+            # usa la maggiore tra la data di partenza delle disponibilità inserita tramite api e la data di next day impostata precedentemente
+            datetime_from_filter = max((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S').date()), first_reservation_datetime.date())
         except ValueError:
             return jsonify({"error": "Invalid datetime format. Use YYYY-MM-DD HH:MM:SS"}), 400
     else:
         datetime_from_filter = first_reservation_datetime
 
-    # tramite la sessione crea la query
+    # tramite la sessione crea la availability_query
     with Session(engine) as session:
-        query = (
+        
+  
+        slots_booking_query = (
+        session.query(OperatorsAvailability.laboratory_id, OperatorsAvailability.operator_id, SlotBooking.appointment_id, SlotBooking.availability_id, SlotBooking.appointment_datetime_start, SlotBooking.appointment_datetime_end, SlotBooking.exam_type_id, SlotBooking.rejected)
+        .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
+    )
+
+        slots_booking_query = slots_booking_query.filter(SlotBooking.rejected == False)
+        slots_booking_query = slots_booking_query.filter(SlotBooking.appointment_datetime_end >= datetime_from_filter.date())
+
+        # Filtra la slots_booking_query in base ai parametri opzionali
+        if exam_type_id:
+            slots_booking_query = slots_booking_query.filter(SlotBooking.exam_type_id == exam_type_id)
+        if operator_id:
+            slots_booking_query = slots_booking_query.filter(SlotBooking.operator.operator_id == operator_id)
+        if laboratory_id:
+            slots_booking_query = slots_booking_query.filter(SlotBooking.laboratory.laboratory_id == laboratory_id)
+        
+        booked_slots = slots_booking_query.all()
+        
+        
+        
+        
+        availability_query = (
             session.query(OperatorsAvailability)
             .join(OperatorsAvailability.operator)
             .join(OperatorsAvailability.laboratory)
+            .join(OperatorsAvailability.exam_type)
         )
 
-        # Filtra la query in base ai parametri obbligatori la disponibilità deve essere attiva e non deve essere scaduta
-        query = query.filter(OperatorsAvailability.enabled == True)
-        query = query.filter(OperatorsAvailability.available_to_date >= datetime_from_filter.date())
+        # Filtra la availability_query in base ai parametri obbligatori la disponibilità deve essere attiva e la data di inizio deve esseere compresa tra la data di inizio e fine della disponibilità
+        availability_query = availability_query.filter(OperatorsAvailability.enabled == True)
+        availability_query = availability_query.filter(OperatorsAvailability.available_from_date <= datetime_from_filter.date())
+        availability_query = availability_query.filter(OperatorsAvailability.available_to_date >= datetime_from_filter.date())
 
-        # Filtra la query in base ai parametri opzionali
+        # Filtra la availability_query in base ai parametri opzionali
         if exam_type_id:
-            query = query.filter(OperatorsAvailability.exam_type_id == exam_type_id)
+            availability_query = availability_query.filter(OperatorsAvailability.exam_type_id == exam_type_id)
         if operator_id:
-            query = query.filter(OperatorsAvailability.operator.operator_id == operator_id)
+            availability_query = availability_query.filter(OperatorsAvailability.operator.operator_id == operator_id)
         if laboratory_id:
-            query = query.filter(OperatorsAvailability.laboratory.laboratory_id == laboratory_id)
+            availability_query = availability_query.filter(OperatorsAvailability.laboratory.laboratory_id == laboratory_id)
 
-        results = query.all()
+        availability_results = availability_query.all()
 
-        for availability in results:
+
+        for availability in availability_results:
             print(
                 "Availability ID:", availability.availability_id,
                 "| Operator:", availability.operator.operator_name,
@@ -113,11 +137,10 @@ def get_slots_availability():
             )
         
         try:
-            slots = get_operator_availabilitys_slots(results, datetime_from_filter)
+            slots = get_operator_availabilitys_slots(availability_results, datetime_from_filter)
             return jsonify(slots), 200
         except Exception as e:
             # Log dell'errore con stack trace
             logging.error("Error in slot conversion: %s", str(e))
-            logging.error(traceback.format_exc())
             return jsonify({"error": "Slot conversion Error"}), 500
         
