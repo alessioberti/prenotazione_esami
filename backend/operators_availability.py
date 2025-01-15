@@ -7,29 +7,30 @@ def add_minutes_to_time(original_time, minutes_to_add):
     return temp_datetime.time()
 
 #funzione per verificare se uno slot è già stato prenotato
-def slot_is_booked(slot, booked_slots):
+def slot_is_booked(operator_availability_id, operator_availability_date, operator_availability_slot_start, operator_availability_slot_end, booked_slots):
     for booked_slot in booked_slots:
         if (
-            slot["operator_availability_id"] == booked_slot["operator_availability_id"] and 
-            datetime.combine(slot["operator_availability_date"], slot["operator_availability_slot_start"]) == booked_slot.appointment_datetime_start and
-            datetime.combine(slot["operator_availability_date"], slot["operator_availability_slot_end"]) == booked_slot.appointment_datetime_end):   
+            operator_availability_id == booked_slot.availability_id and 
+            
+            datetime.combine(operator_availability_date, operator_availability_slot_start) == booked_slot.appointment_datetime_start and
+            datetime.combine(operator_availability_date, operator_availability_slot_end) == booked_slot.appointment_datetime_end):   
       
             return True
     return False
 
 #funzione per verificare se uno slot è in un periodo di chiusura di un laboratorio 
-def lab_is_closed(slot, laboratory_closures):
+def lab_is_closed(laboratory_id, operator_availability_date, operator_availability_slot_start, operator_availability_slot_end, laboratory_closures):
     for laboratory_closure in laboratory_closures:
-        if slot["laboratory_id"] == laboratory_closure["laboratory_id"]:
-            if datetime.combine(slot["operator_availability_date"],slot["operator_availability_slot_start"]) < laboratory_closure["end_datetime"] and datetime.combine(slot["operator_availability_date"],slot["operator_availability_slot_end"]) > laboratory_closure["start_datetime"]:
+        if laboratory_id == laboratory_closure.laboratory_id:
+            if datetime.combine(operator_availability_date, operator_availability_slot_start) < laboratory_closure.end_datetime and datetime.combine(operator_availability_date, operator_availability_slot_end) > laboratory_closure.start_datetime :
                 return True
     return False
 
 #funzione per verificare se uno slot è in un periodo di assenza di un operatore 
-def operator_is_absent(slot, operator_absences):
+def operator_is_absent(operator_id, operator_availability_date ,operator_availability_slot_start, operator_availability_slot_end, operator_absences):
     for operator_absence in operator_absences:
-        if slot["operator_id"] == operator_absence["operator_id"]:
-            if datetime.combine(slot["operator_availability_date"],slot["operator_availability_slot_start"]) < operator_absence["end_datetime"] and datetime.combine(slot["operator_availability_date"],slot["operator_availability_slot_end"]) > operator_absence["start_datetime"]:
+        if operator_id == operator_absence.operator_id:
+            if datetime.combine(operator_availability_date, operator_availability_slot_start) < operator_absence.end_datetime and datetime.combine(operator_availability_date, operator_availability_slot_end) > operator_absence.start_datetime :
                 return True
     return False
 
@@ -62,8 +63,8 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
                 slot = {
                     "operator_availability_id": operator_availability.availability_id,
                     "exam_type_id": operator_availability.exam_type_id,
-                    "laboratory_id":operator_availability.laboratory_id,
-                    "operator_id":operator_availability.operator_id,
+                    "laboratory_id": operator_availability.laboratory_id,
+                    "operator_id": operator_availability.operator_id,
                     "exam_type_name": operator_availability.exam_type.name,
                     "laboratory_name": operator_availability.laboratory.name,
                     "operator_name": operator_availability.operator.name,
@@ -75,10 +76,10 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
                 # se lo slot è dopo l'orario del filtro e se è il laboratorio non è chiuso l'oepratore in ferie e lo slot non è già prenotato
                 if (
                     ((datetime_from_filter == None) or (datetime.combine(operator_availability_date, operator_availability_slot_start) >= datetime_from_filter)) and
-                    ((laboratory_closures == None) or (not lab_is_closed(slot,laboratory_closures))) and 
-                    ((operator_absences == None) or (not operator_is_absent(slot,operator_absences))) and 
-                    ((booked_slots == None) or (not slot_is_booked(slot,booked_slots)))):
-                    
+                    ((laboratory_closures == None) or (not lab_is_closed(operator_availability.laboratory_id, operator_availability_date, operator_availability_slot_start, operator_availability_slot_end, laboratory_closures))) and 
+                    ((operator_absences == None) or (not operator_is_absent(operator_availability.operator_id, operator_availability_date ,operator_availability_slot_start, operator_availability_slot_end, operator_absences))) and 
+                    ((booked_slots == None) or (not slot_is_booked(operator_availability.availability_id, operator_availability_date, operator_availability_slot_start, operator_availability_slot_end, booked_slots)))):
+
                     # aggiungi lo slot all'array
                     operators_availability_slots.append(slot)
 

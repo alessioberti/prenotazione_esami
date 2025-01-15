@@ -41,23 +41,15 @@ class Laboratory(Base):
         back_populates="laboratory"
     )
 
-    def __repr__(self) -> str:
-        return f"Laboratory(laboratory_id={self.laboratory_id!r}, name={self.name!r})"
-
 # Tabella giorni di chiusura dei laboratori
 class LaboratoryClosure(Base):
     __tablename__ = "laboratory_closures"
 
     closure_id: Mapped[int] = mapped_column(primary_key=True)
     laboratory_id: Mapped[int] = mapped_column(ForeignKey("laboratories.laboratory_id"), nullable=False)
-    start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    end_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    start_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    end_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    def __repr__(self) -> str:
-        return (
-            f"LaboratoryClosure(closure_id={self.closure_id!r}, "
-            f"start_date={self.start_date!r}, end_date={self.end_date!r})"
-        )
 
 # Tabella di gestione dei tipi di esame
 class ExamType(Base):
@@ -71,9 +63,6 @@ class ExamType(Base):
         back_populates="exam_type"
     )
 
-    def __repr__(self) -> str:
-        return f"ExamType(exam_type_id={self.exam_type_id!r}, name={self.name!r})"
-
 # Tabella per la gestione degli operatori
 class Operator(Base):
     __tablename__ = "operators"
@@ -85,20 +74,14 @@ class Operator(Base):
         back_populates="operator"
     )
 
-    def __repr__(self) -> str:
-        return f"Operator(operator_id={self.operator_id!r}, name={self.name!r})"
-
 # Tabella per la gestione delle assenze
 class OperatorAbsence(Base):
     __tablename__ = "operator_absences"
 
     absence_id: Mapped[int] = mapped_column(primary_key=True)
     operator_id: Mapped[int] = mapped_column(ForeignKey("operators.operator_id"), nullable=False)
-    start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    end_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-
-    def __repr__(self) -> str:
-        return f"OperatorAbsence(absence_id={self.absence_id!r}, operator_id={self.operator_id!r})"
+    start_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    end_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 class OperatorsAvailability(Base):
     __tablename__ = "operators_availability"
@@ -111,7 +94,7 @@ class OperatorsAvailability(Base):
     available_to_date: Mapped[date] = mapped_column(Date, nullable=False)
     available_from_time: Mapped[time] = mapped_column(Time, nullable=False)
     available_to_time: Mapped[time] = mapped_column(Time, nullable=False)
-    available_weekday: Mapped[int] = mapped_column(nullable=False)
+    available_weekday: Mapped[int] = mapped_column(nullable=False) # 0: Lunedì...6:Domenica
     slot_duration_minutes: Mapped[int] = mapped_column(nullable=False)
     pause_minutes: Mapped[int] = mapped_column(nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -120,9 +103,7 @@ class OperatorsAvailability(Base):
     laboratory: Mapped["Laboratory"] = relationship(back_populates="operators_availability")
     operator: Mapped["Operator"] = relationship(back_populates="operators_availability")
     exam_type: Mapped["ExamType"] = relationship(back_populates="operators_availability")
-
-    def __repr__(self) -> str:
-        return f"OperatorsAvailability(availability_id={self.availability_id!r}, enabled={self.enabled!r})"
+    slot_bookings: Mapped[List["SlotBooking"]] = relationship(back_populates="operators_availability")
 
 # Tabella per la gestione dei pazienti
 class Patient(Base):
@@ -130,9 +111,6 @@ class Patient(Base):
 
     patient_id: Mapped[int] = mapped_column(primary_key=True)
     patient_name: Mapped[str] = mapped_column(String(255), nullable=False)
-
-    def __repr__(self) -> str:
-        return f"Patient(patient_id={self.patient_id!r}, patient_name={self.patient_name!r})"
 
 # Tabella per la gestione delle prenotazioni
 class SlotBooking(Base):
@@ -144,10 +122,10 @@ class SlotBooking(Base):
     appointment_datetime_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     appointment_datetime_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     rejected: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    def __repr__(self) -> str:
-        return f"SlotBooking(appointment_id={self.appointment_id!r}, rejected={self.rejected!r})"
-
+    
+    # Relazioni
+    operators_availability: Mapped["OperatorsAvailability"] = relationship(back_populates="slot_bookings")
+    
 engine = create_engine("sqlite:///database.db", echo=False)
 
 Base.metadata.create_all(engine)
@@ -226,13 +204,13 @@ with Session(engine) as session:
     
         # Inserimento delle chiusure dei laboratori
         closure_1 = LaboratoryClosure(
-            laboratory_id=1, start_date=datetime(2025, 8, 1, 8, 0), end_date=datetime(2025, 8, 15, 18, 0)
+            laboratory_id=1, start_datetime=datetime(2025, 8, 1, 8, 0), end_datetime=datetime(2025, 8, 15, 18, 0)
         )
         closure_2 = LaboratoryClosure(
-            laboratory_id=2, start_date=datetime(2025, 12, 24, 8, 0), end_date=datetime(2025, 12, 26, 18, 0)
+            laboratory_id=2, start_datetime=datetime(2025, 12, 24, 8, 0), end_datetime=datetime(2025, 12, 26, 18, 0)
         )
         closure_3 = LaboratoryClosure(
-            laboratory_id=3, start_date=datetime(2025, 1, 6, 8, 0), end_date=datetime(2025, 1, 6, 18, 0)
+            laboratory_id=3, start_datetime=datetime(2025, 1, 6, 8, 0), end_datetime=datetime(2025, 1, 6, 18, 0)
         )
     
         session.add_all([closure_1, closure_2, closure_3])
