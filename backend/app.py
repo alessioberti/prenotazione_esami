@@ -1,62 +1,10 @@
+from .operators_availability import generate_availabile_slots
 from flask import Flask, request, jsonify
 from datetime import date, datetime, time, timedelta
 from sqlalchemy.orm import Session
-from database import engine, OperatorsAvailability, Operator, Laboratory, ExamType, SlotBooking
+from database import engine, OperatorsAvailability, Operator, Laboratory, SlotBooking, LaboratoryClosure, OperatorAbsence
 import logging
 app = Flask(__name__)
-
-# funzione per gestire l'aggiunta di minuti ad un oggetto time. non è necessario gestire il giorno successivo
-def add_minutes_to_time(original_time, minutes_to_add):
-    temp_datetime = datetime.combine(date.today(), original_time)
-    temp_datetime += timedelta(minutes=minutes_to_add)
-    return temp_datetime.time()
-
-   #funzione per generare slot prenotabili a partire dalle disponibilità degli operatori datetime_from_filter viene utilizzato come parametro nella route per non fornire date nel passato
-def get_operator_availabilitys_slots(operators_availability, datetime_from_filter):
-    # definizione dell'array che coneterrà gli slot generati
-    operators_availability_slots = []
-    # esamina ogni operator_availability rule
-    for operator_availability in operators_availability:
-        # se datetime_from_filter è impostato filtra la disponibilià degli esami partendo da quella data (se maggiore)
-        if isinstance(datetime_from_filter, datetime) and datetime_from_filter.date() > operator_availability.available_from_date:
-            operator_availability_date = datetime_from_filter.date()
-        else:
-            operator_availability_date = operator_availability.available_from_date
-        # sposta operator_availability date al primo giorno della settimana indicato nella operator_availability
-        operator_availability_date += timedelta(days=((operator_availability.available_weekday - operator_availability_date.weekday()) % 7))
-        # per ciascun giorno fino a fine disponibilià compresa 
-        while operator_availability_date <= operator_availability.available_to_date:
-            # imposta la partenza del primo slot sempre all'orario di partenza delle disponibiltà
-            operator_availability_slot_start = operator_availability.available_from_time
-            # per ciascun giorno crea gli slot in fino all'ora di di fine disponibilità
-            while operator_availability_slot_start < operator_availability.available_to_time:
-                # calcola la fine dello slot
-                operator_availability_slot_end = add_minutes_to_time(operator_availability_slot_start, operator_availability.slot_duration_minutes)
-                # se lo slot supera l'orario esci per passare al giorno successivo
-                if operator_availability_slot_end > operator_availability.available_to_time:
-                   break
-                # se il filtro datetime_from_filter impostato scarta lo slot se è dopo la data del filtro
-                # passa allo slot successivo impostando l'orario di fine come data di inizio
-                if isinstance(datetime_from_filter, datetime) and datetime.combine(operator_availability_date, operator_availability_slot_start) <= datetime_from_filter:
-                    operator_availability_slot_start = add_minutes_to_time(operator_availability_slot_end, operator_availability.pause_minutes)
-                    continue
-                # crea lo slot come oggetto dictonary
-                operator_availability_slot = {
-                    "operator_availability_id": operator_availability.availability_id,
-                    "exam_type_id": operator_availability.exam_type_id,
-                    "laboratory_name": operator_availability.laboratory.name,
-                    "operator_name": operator_availability.operator.operator_name,
-                    "operator_availability_date":  operator_availability_date.isoformat(),
-                    "operator_availability_slot_start": operator_availability_slot_start.isoformat(),
-                    "operator_availability_slot_end": operator_availability_slot_end.isoformat()
-                }
-                # aggiungi lo slot all'array e passa allo slot successivo 
-                operators_availability_slots.append(operator_availability_slot)
-                operator_availability_slot_start = add_minutes_to_time(operator_availability_slot_end, operator_availability.pause_minutes)
-            # passa alla settimana successiva
-            operator_availability_date += timedelta(days=7)
-
-    return operators_availability_slots
 
 @app.route('/api/slots_availability', methods=['GET'])
 def get_slots_availability():
@@ -85,26 +33,45 @@ def get_slots_availability():
     with Session(engine) as session:
         
   
-        slots_booking_query = (
-        session.query(OperatorsAvailability.laboratory_id, OperatorsAvailability.operator_id, SlotBooking.appointment_id, SlotBooking.availability_id, SlotBooking.appointment_datetime_start, SlotBooking.appointment_datetime_end, SlotBooking.exam_type_id, SlotBooking.rejected)
-        .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
-    )
+        booked_slots_query = session.query(
+            OperatorsAvailability.laboratory_id, OperatorsAvailability.operator_id, OperatorsAvailability.exam_type_id,
+            SlotBooking.appointment_id, SlotBooking.availability_id, SlotBooking.appointment_datetime_start, SlotBooking.appointment_datetime_end, SlotBooking.rejected
+            ).join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id
+        )
+        
+        booked_slots_query = booked_slots_query.filter(SlotBooking.rejected == False)
+        booked_slots_query = booked_slots_query.filter(SlotBooking.appointment_datetime_end >= datetime_from_filter.date())
 
-        slots_booking_query = slots_booking_query.filter(SlotBooking.rejected == False)
-        slots_booking_query = slots_booking_query.filter(SlotBooking.appointment_datetime_end >= datetime_from_filter.date())
-
-        # Filtra la slots_booking_query in base ai parametri opzionali
         if exam_type_id:
-            slots_booking_query = slots_booking_query.filter(SlotBooking.exam_type_id == exam_type_id)
+            booked_slots_query = booked_slots_query.filter(SlotBooking.operators_availability.exam_type_id == exam_type_id)
         if operator_id:
-            slots_booking_query = slots_booking_query.filter(SlotBooking.operator.operator_id == operator_id)
+            booked_slots_query = booked_slots_query.filter(SlotBooking.operators_availability.operator_id == operator_id)
         if laboratory_id:
-            slots_booking_query = slots_booking_query.filter(SlotBooking.laboratory.laboratory_id == laboratory_id)
+            booked_slots_query = booked_slots_query.filter(SlotBooking.operators_availability.laboratory_id == laboratory_id)
         
-        booked_slots = slots_booking_query.all()
+
+        # Crea la query per i periodi di chiusura dei laboratori
+
+        laboratory_closures_query = (
+            session.query(Laboratory.laboratory_id, LaboratoryClosure.start_datetime, LaboratoryClosure.end_datetime)
+            .join(LaboratoryClosure, Laboratory.laboratory_id == LaboratoryClosure.laboratory_id)
+        )   
+
+        laboratory_closures_query = laboratory_closures_query.filter(LaboratoryClosure.end_datetime >= datetime_from_filter.date())
         
+        if laboratory_id:
+            laboratory_closures_query = laboratory_closures_query.filter(Laboratory.laboratory_id == laboratory_id)
         
-        
+        # Crea la query per i periodi di assenza degli operatori
+
+        operator_absences_query = (
+            session.query(Operator.operator_id, OperatorAbsence.start_datetime, OperatorAbsence.end_datetime)
+            .join(OperatorAbsence, Operator.operator_id == OperatorAbsence.operator_id)
+        )  
+
+        operator_absences_query = operator_absences_query.filter(OperatorAbsence.end_datetime >= datetime_from_filter.date())
+        if operator_id:
+            operator_absences_query = operator_absences_query.filter(Operator.operator_id == operator_id)
         
         availability_query = (
             session.query(OperatorsAvailability)
@@ -126,18 +93,8 @@ def get_slots_availability():
         if laboratory_id:
             availability_query = availability_query.filter(OperatorsAvailability.laboratory.laboratory_id == laboratory_id)
 
-        availability_results = availability_query.all()
-
-
-        for availability in availability_results:
-            print(
-                "Availability ID:", availability.availability_id,
-                "| Operator:", availability.operator.operator_name,
-                "| Laboratory:", availability.laboratory.name
-            )
-        
         try:
-            slots = get_operator_availabilitys_slots(availability_results, datetime_from_filter)
+            slots = generate_availabile_slots(availability_query.all(), datetime_from_filter, laboratory_closures_query.all(), operator_absences_query.all(), booked_slots_query.all())
             return jsonify(slots), 200
         except Exception as e:
             # Log dell'errore con stack trace

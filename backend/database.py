@@ -79,14 +79,14 @@ class Operator(Base):
     __tablename__ = "operators"
 
     operator_id: Mapped[int] = mapped_column(primary_key=True)
-    operator_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     operators_availability: Mapped[List["OperatorsAvailability"]] = relationship(
         back_populates="operator"
     )
 
     def __repr__(self) -> str:
-        return f"Operator(operator_id={self.operator_id!r}, operator_name={self.operator_name!r})"
+        return f"Operator(operator_id={self.operator_id!r}, name={self.name!r})"
 
 # Tabella per la gestione delle assenze
 class OperatorAbsence(Base):
@@ -176,11 +176,11 @@ with Session(engine) as session:
         session.add_all([marco, giulia, alessandro, elena, carlo])
     
         # Inserimento degli operatori
-        op_marco = Operator(operator_id=1, operator_name="Marco Rossi")
-        op_giulia = Operator(operator_id=2, operator_name="Giulia Verdi")
-        op_alessandro = Operator(operator_id=3, operator_name="Alessandro Bianchi")
-        op_elena = Operator(operator_id=4, operator_name="Elena Santini")
-        op_carlo = Operator(operator_id=5, operator_name="Carlo Lombardi")
+        op_marco = Operator(operator_id=1, name="Marco Rossi")
+        op_giulia = Operator(operator_id=2, name="Giulia Verdi")
+        op_alessandro = Operator(operator_id=3, name="Alessandro Bianchi")
+        op_elena = Operator(operator_id=4, name="Elena Santini")
+        op_carlo = Operator(operator_id=5, name="Carlo Lombardi")
     
         session.add_all([op_marco, op_giulia, op_alessandro, op_elena, op_carlo])
     
