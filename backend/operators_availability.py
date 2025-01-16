@@ -1,4 +1,7 @@
 from datetime import date, datetime, time, timedelta
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 # funzione per gestire l'aggiunta di minuti ad un oggetto time. non è necessario gestire il giorno successivo
 def add_minutes_to_time(original_time, minutes_to_add):
@@ -40,11 +43,23 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
     operators_availability_slots = []
     # esamina ogni operator_availability rule
     for operator_availability in operators_availability:
+
+        logging.info(
+            "Processo availability_id=%s, dal %s al %s, weekday=%d",
+            operator_availability.availability_id,
+            operator_availability.available_from_date,
+            operator_availability.available_to_date,
+            operator_availability.available_weekday
+        )
+
         # se datetime_from_filter è impostato filtra la disponibilià degli esami partendo da quella data (se maggiore)
         if  isinstance(datetime_from_filter, datetime) and datetime_from_filter.date() > operator_availability.available_from_date:
             operator_availability_date = datetime_from_filter.date()
         else:
             operator_availability_date = operator_availability.available_from_date
+
+        logging.info(" - Calcolo gli slot slot per il giorno %s", operator_availability_date)
+
         # sposta operator_availability date al primo giorno della settimana indicato nella operator_availability
         operator_availability_date += timedelta(days=((operator_availability.available_weekday - operator_availability_date.weekday()) % 7))
         # per ciascun giorno fino a fine disponibilià compresa 

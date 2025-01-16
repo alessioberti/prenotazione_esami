@@ -1,4 +1,5 @@
 from typing import List, Optional
+from flask_login import UserMixin
 from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import create_engine
@@ -7,25 +8,27 @@ from sqlalchemy.exc import IntegrityError
 
 from datetime import datetime, date, time
 
+
+#https://docs.sqlalchemy.org/en/20/tutorial/metadata.html#tutorial-working-with-metadata
+#https://www.digitalocean.com/community/tutorials/how-to-add-authentication-to-your-app-with-flask-login
+
 class Base(DeclarativeBase):
     pass
 
 
 # Tabella Gestione degli account 
-class Account(Base):
+class Account(Base, UserMixin):
     __tablename__ = "account"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     tel_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
 
-    def __repr__(self) -> str:
-        return (
-            f"Account(id={self.id!r}, username={self.username!r}, "
-            f"email={self.email!r}, tel_number={self.tel_number!r})"
-        )
+    # Richiesto da flask-login
+    def get_id(self):
+        return str(self.account_id)
 
 # Tabella gestione Laboratori
 class Laboratory(Base):
@@ -105,19 +108,12 @@ class OperatorsAvailability(Base):
     exam_type: Mapped["ExamType"] = relationship(back_populates="operators_availability")
     slot_bookings: Mapped[List["SlotBooking"]] = relationship(back_populates="operators_availability")
 
-# Tabella per la gestione dei pazienti
-class Patient(Base):
-    __tablename__ = "patients"
-
-    patient_id: Mapped[int] = mapped_column(primary_key=True)
-    patient_name: Mapped[str] = mapped_column(String(255), nullable=False)
-
 # Tabella per la gestione delle prenotazioni
 class SlotBooking(Base):
     __tablename__ = "slot_bookings"
 
     appointment_id: Mapped[int] = mapped_column(primary_key=True)
-    patient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("patients.patient_id"))
+    account_id: Mapped[Optional[int]] = mapped_column(ForeignKey("account.account_id"))
     availability_id: Mapped[int] = mapped_column(ForeignKey("operators_availability.availability_id"), nullable=False)
     appointment_datetime_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     appointment_datetime_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -125,7 +121,7 @@ class SlotBooking(Base):
     
     # Relazioni
     operators_availability: Mapped["OperatorsAvailability"] = relationship(back_populates="slot_bookings")
-    
+
 engine = create_engine("sqlite:///database.db", echo=False)
 
 Base.metadata.create_all(engine)
