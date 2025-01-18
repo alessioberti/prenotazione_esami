@@ -22,13 +22,19 @@ class Account(Base, UserMixin):
 
     account_id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     email: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
-    tel_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    tel_number: Mapped[str] = mapped_column(String(30))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    failed_login_count: Mapped[int] = mapped_column(int, default=0)
+    last_failed_login: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
-    # Richiesto da flask-login
+    # Richiesto da flask-login per la gestione delle sessioni 
     def get_id(self):
         return str(self.account_id)
+
+    def is_active(self):
+        return self.enabled
 
 # Tabella gestione Laboratori
 class Laboratory(Base):
@@ -139,15 +145,6 @@ with Session(engine) as session:
         clombardi = Account(username="clombardi", password_hash="hashpassword5", email="carlo.lombardi@example.com", tel_number="3405678901")
     
         session.add_all([mrossi, gverdi, albianchi, esantini, clombardi])
-    
-        # Inserimento dei pazienti
-        marco = Patient(patient_id=1, patient_name="Marco Rossi")
-        giulia = Patient(patient_id=2, patient_name="Giulia Verdi")
-        alessandro = Patient(patient_id=3, patient_name="Alessandro Bianchi")
-        elena = Patient(patient_id=4, patient_name="Elena Santini")
-        carlo = Patient(patient_id=5, patient_name="Carlo Lombardi")
-    
-        session.add_all([marco, giulia, alessandro, elena, carlo])
     
         # Inserimento degli operatori
         op_marco = Operator(operator_id=1, name="Marco Rossi")

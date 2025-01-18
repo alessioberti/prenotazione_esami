@@ -26,10 +26,10 @@ def load_user(user_id):
 
     with Session(engine) as session:
         
-        account_query= select(Account).where(Account.user_id == user_id)
-        account_query = session.execute(account_query).scalars().first()
+        account_query= select(Account).where(Account.account_id == user_id)
+        account_query = session.execute(account_query)
 
-        return account_query.account_id
+        return account_query.scalars().first()
 
 @app.post("/register")
 def register():
@@ -37,10 +37,11 @@ def register():
     if not new_account:
         return jsonify({"Request invalid":"missing JSON body"}), 400
 
-    username_regex = r"^[a-zA-Z0-9_]{3,20}$"
-    password_regex = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$"
-    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-    tel_number_regex = r"^\+?[0-9]{1,3}[0-9]{5,12}$"
+    username_regex = r'^[0-9A-Za-z]{6,16}$'
+    password_regex = r'^(?=.*?[0-9])(?=.*?[A-Za-z]).{8,32}$'
+    email_regex    = r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
+    tel_number_regex = r'^\+?\d{10,13}$'
+
 
     if not re.match(username_regex, new_account.get("username")):
         return jsonify({"error": "Invalid username"}), 400
@@ -73,15 +74,18 @@ def register():
 
 @app.post("/login")
 def login():
-    account = request.json
-    if not account:
+    account_data = request.json
+    if not account_data:
         return jsonify({"error":"missing JSON body"}), 400
     
     with Session(engine) as session:
-        account_query = select(Account).where(Account.username == account.get("username"))
+        account_query = select(Account).where(Account.username == account_data.get("username"))
         account = session.execute(account_query).scalars().first()
 
-        if not account or check_password_hash(account.password_hash, account.get("password")):
+        if (account.last_failed_login > 5) and ((datetime.now() - account.last_failed_login) < timedelta(minutes=5)):
+            return jsonify({"error": "Too many login attempts"}), 401
+
+        if not account or (not check_password_hash(account.password_hash, account_data.get("password"))):
             return jsonify({"error": "Invalid username or password"}), 401
         
         login_user(account)
@@ -104,7 +108,7 @@ def get_slots_availability():
 
     # Imposta un controllo sulla data di partenza della verifica delle disponibilità che non può essere nel passato o nel giorno corrente
     # può essere richiesta la disponibità dalla data successiva alla data odierna
-    first_reservation_datetime = datetime.combine(datetime.now().date() + timedelta(days=1), time(0, 6))
+    first_reservation_datetime = datetime.combine((datetime.now('Europe/Rome') + timedelta(days=1)).date(), time(0, 0))
     if datetime_from_filter:
         try:
             datetime_from_filter = max((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S')), first_reservation_datetime)
@@ -259,29 +263,28 @@ def get_laboratories():
 
     return jsonify(labs_list), 200
 
-@app.post("/book_slot_restricted")
+@app.post("/book_slot")
 @login_required
 def book_slot():
-    
-    logged_user = current_user.account_id
+
     slot = request.json
 
     if not slot:
         return jsonify({"error": "Missing JSON body"}), 400
 
-    if not slot.get("account_id") == logged_user:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    operator_availability_slot_start=time.fromisoformat(slot["operator_availability_slot_start"])
-    operator_availability_slot_end=time.fromisoformat(slot["operator_availability_slot_end"])
-    operator_availability_date=date.fromisoformat(slot["operator_availability_date"])
-    appointment_datetime_start = datetime.combine(operator_availability_date, operator_availability_slot_start)
-    appointment_datetime_end = datetime.combine(operator_availability_date, operator_availability_slot_end)
+    try:
+        operator_availability_slot_start=time.fromisoformat(slot["operator_availability_slot_start"])
+        operator_availability_slot_end=time.fromisoformat(slot["operator_availability_slot_end"])
+        operator_availability_date=date.fromisoformat(slot["operator_availability_date"])
+        appointment_datetime_start = datetime.combine(operator_availability_date, operator_availability_slot_start)
+        appointment_datetime_end = datetime.combine(operator_availability_date, operator_availability_slot_end)
+    except KeyError or ValueError:
+        return jsonify({"error": "key messing or Vaule Format"}), 400
 
     with Session(engine) as session:
 
         new_booking = SlotBooking(
-            patient_id=slot.get("patient_id"),
+            account_id=current_user.account_id,
             availability_id=slot.get("availability_id"),
             appointment_datetime_start = appointment_datetime_start,
             appointment_datetime_end = appointment_datetime_end,
@@ -293,21 +296,17 @@ def book_slot():
             session.commit()
         except IntegrityError:
             session.rollback()
-            return jsonify({"error": "Integrity Error"}), 400
+            return jsonify({"error": "Integrity Error"})
+        return jsonify({"message": "Booking Complete"}), 200
+    
         
-@app.get("/book_slot_restricted")
+@app.get("/slot_bookings")
 @login_required
 def get_booked_slots():
-    account_id = request.args.get("account_id", type=int)
-
-    logged_user = current_user.account_id
-    
-    if not slot.get("account_id") == logged_user:
-        return jsonify({"error": "Unauthorized"}), 401
 
     with Session(engine) as session:
 
-        booked_slots_query = select(SlotBooking).where(SlotBooking.account_id == account_id)
+        booked_slots_query = select(SlotBooking).where(SlotBooking.account_id == current_user.account_id)
         booked_slots = session.execute(booked_slots_query).scalars().all()
 
         slots_list = []
@@ -322,25 +321,21 @@ def get_booked_slots():
 
     return jsonify(slots_list), 200
 
-@app.delete("/book_slot_restricted")
+@app.delete("/book_slot/<int:slot_id>")
 @login_required
-def delete_booked_slot():
+def delete_booked_slot(slot_id):
 
-    slot = request.json
     logged_user = current_user.account_id
-
-    if not slot:
-        return jsonify({"error": "Missing JSON body"}), 400
-    
-    if not slot.get("account_id") == logged_user:
-        return jsonify({"error": "Unauthorized"}), 401
     
     with Session(engine) as session:
-        slot_query = select(SlotBooking).where(SlotBooking.slot_id == slot.get("slot_id"))
+        slot_query = select(SlotBooking).where(SlotBooking.slot_id == slot_id)
         slot = session.execute(slot_query).scalars().first()
 
         if not slot:
             return jsonify({"error": "Slot not found"}), 404
+        
+        if not slot.account_id == logged_user:
+            return jsonify({"error": "Unauthorized"}), 401
 
         session.delete(slot)
         session.commit()
