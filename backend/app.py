@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session 
@@ -9,27 +9,29 @@ import logging, traceback
 from operators_availability import generate_availabile_slots
 from werkzeug.security import check_password_hash, generate_password_hash
 import re
+from zoneinfo import ZoneInfo
 
 #https://flask.palletsprojects.com/en/stable/quickstart/
 #https://flask-login.readthedocs.io/en/latest/
+#https://flask-jwt-extended.readthedocs.io/en/stable/
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "supersegreto123"
+app.config["JWT_SECRET_KEY"] = "supersegreto123"
+jwt = JWTManager(app)
 logging.basicConfig(level=logging.INFO)
+BLOCKLIST = set()
+@jwt.token_in_blocklist_loader
+def check_if_token_in_blocklist(jwt_header, jwt_payload):
+    return jwt_payload["jti"] in BLOCKLIST
 
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-
-@login_manager.user_loader
-def load_user(user_id):
-
-    with Session(engine) as session:
-        
-        account_query= select(Account).where(Account.account_id == user_id)
-        account_query = session.execute(account_query)
-
-        return account_query.scalars().first()
+@jwt.revoked_token_loader
+def revoked_token_callback(jwt_header, jwt_payload):
+    return (
+        jsonify(
+            {"description": "The token has been revoked.", "error": "token_revoked"}
+        ),
+        401,
+    )
 
 @app.post("/register")
 def register():
@@ -82,23 +84,40 @@ def login():
         account_query = select(Account).where(Account.username == account_data.get("username"))
         account = session.execute(account_query).scalars().first()
 
-        if (account.last_failed_login > 5) and ((datetime.now() - account.last_failed_login) < timedelta(minutes=5)):
-            return jsonify({"error": "Too many login attempts"}), 401
-
-        if not account or (not check_password_hash(account.password_hash, account_data.get("password"))):
+        if not account:
             return jsonify({"error": "Invalid username or password"}), 401
         
-        login_user(account)
-        return jsonify({"message": "Logged in"}), 200
+        if not account.enabled:
+            return jsonify({"error": "Account disabled"}), 403
 
+        if (account.failed_login_count >= 5) and ((datetime.now() - account.last_failed_login) < timedelta(minutes=5)):
+            return jsonify({"error": "Too many login attempts"}), 401
+
+        if  check_password_hash(account.password_hash, account_data.get("password")):
+        
+            account.failed_login_count = 0
+            account.last_failed_login = None
+            session.commit()
+
+            access_token = create_access_token(identity=account.account_id)
+            return jsonify(access_token=access_token), 200
+        
+        else:
+            account.failed_login_count = account.failed_login_count + 1
+            account.last_failed_login = datetime.now()
+            session.commit()
+
+            return jsonify({"error": "Invalid username or password"}), 401
+            
 @app.post("/logout")
-@login_required
+@jwt_required()
 def logout():
-    logout_user()
+    jti = get_jwt()["jti"]
+    BLOCKLIST.add(jti)
     return jsonify({"Success": "Logged out"}), 200
 
 @app.get('/slots_availability')
-@login_required
+@jwt_required()
 def get_slots_availability():
    
     datetime_from_filter = request.args.get('datetime_from_filter')
@@ -194,7 +213,7 @@ def get_slots_availability():
             return jsonify({"error": "Slot conversion Error"}), 500
 
 @app.get("/operators")
-@login_required
+@jwt_required()
 def get_operators():
 
     operator_id = request.args.get("operator_id", type=int)
@@ -217,7 +236,7 @@ def get_operators():
     return jsonify(operators_list), 200
 
 @app.get("/exam_types")
-@login_required
+@jwt_required()
 def get_exam_types():
     exam_type_id = request.args.get("exam_type_id", type=int)
 
@@ -240,7 +259,7 @@ def get_exam_types():
     return jsonify(exam_types_list), 200
 
 @app.get("/laboratories")
-@login_required
+@jwt_required()
 def get_laboratories():
     laboratory_id = request.args.get("laboratory_id", type=int)
 
@@ -264,10 +283,11 @@ def get_laboratories():
     return jsonify(labs_list), 200
 
 @app.post("/book_slot")
-@login_required
+@jwt_required()
 def book_slot():
 
     slot = request.json
+    current_user = get_jwt_identity()
 
     if not slot:
         return jsonify({"error": "Missing JSON body"}), 400
@@ -278,13 +298,14 @@ def book_slot():
         operator_availability_date=date.fromisoformat(slot["operator_availability_date"])
         appointment_datetime_start = datetime.combine(operator_availability_date, operator_availability_slot_start)
         appointment_datetime_end = datetime.combine(operator_availability_date, operator_availability_slot_end)
-    except KeyError or ValueError:
-        return jsonify({"error": "key messing or Vaule Format"}), 400
+
+    except (KeyError, ValueError):
+        return jsonify({"error": "Missing key or invalid value format"}), 400
 
     with Session(engine) as session:
 
         new_booking = SlotBooking(
-            account_id=current_user.account_id,
+            account_id=current_user,
             availability_id=slot.get("availability_id"),
             appointment_datetime_start = appointment_datetime_start,
             appointment_datetime_end = appointment_datetime_end,
@@ -301,12 +322,14 @@ def book_slot():
     
         
 @app.get("/slot_bookings")
-@login_required
+@jwt_required()
 def get_booked_slots():
+
+    current_user = get_jwt_identity()
 
     with Session(engine) as session:
 
-        booked_slots_query = select(SlotBooking).where(SlotBooking.account_id == current_user.account_id)
+        booked_slots_query = select(SlotBooking).where(SlotBooking.account_id == current_user)
         booked_slots = session.execute(booked_slots_query).scalars().all()
 
         slots_list = []
@@ -322,10 +345,10 @@ def get_booked_slots():
     return jsonify(slots_list), 200
 
 @app.delete("/book_slot/<int:slot_id>")
-@login_required
+@jwt_required()
 def delete_booked_slot(slot_id):
 
-    logged_user = current_user.account_id
+    current_user = get_jwt_identity()
     
     with Session(engine) as session:
         slot_query = select(SlotBooking).where(SlotBooking.slot_id == slot_id)
@@ -334,7 +357,7 @@ def delete_booked_slot(slot_id):
         if not slot:
             return jsonify({"error": "Slot not found"}), 404
         
-        if not slot.account_id == logged_user:
+        if not slot.account_id == current_user:
             return jsonify({"error": "Unauthorized"}), 401
 
         session.delete(slot)

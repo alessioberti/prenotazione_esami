@@ -17,7 +17,7 @@ class Base(DeclarativeBase):
 
 
 # Tabella Gestione degli account 
-class Account(Base, UserMixin):
+class Account(Base):
     __tablename__ = "account"
 
     account_id: Mapped[int] = mapped_column(primary_key=True)
@@ -28,13 +28,6 @@ class Account(Base, UserMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     failed_login_count: Mapped[int] = mapped_column(int, default=0)
     last_failed_login: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-
-    # Richiesto da flask-login per la gestione delle sessioni 
-    def get_id(self):
-        return str(self.account_id)
-
-    def is_active(self):
-        return self.enabled
 
 # Tabella gestione Laboratori
 class Laboratory(Base):
