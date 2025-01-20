@@ -59,7 +59,7 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
 
         # se datetime_to_filter è impostato filtra la disponibilità degli esami fino a quella data (se inferiore)
         if  isinstance(datetime_to_filter, datetime):
-            operator_availability_maxdate = min(datetime_to_filter, operator_availability.available_to_date)
+            operator_availability_maxdate = min(datetime_to_filter.date(), operator_availability.available_to_date)
         else:
             operator_availability_maxdate = operator_availability.available_from_date
 

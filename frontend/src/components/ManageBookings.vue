@@ -12,7 +12,7 @@
 </template>
 
 <script>
-import axios from "axios";
+import axios from "../services/axios";
 
 export default {
   data() {

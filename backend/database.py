@@ -178,7 +178,7 @@ with Session(engine) as session:
             available_weekday=1, slot_duration_minutes=30, pause_minutes=10, enabled=True
         )
         availability_2 = OperatorsAvailability(
-            exam_type_id=2, laboratory_id=2, operator_id=2,
+            exam_type_id=1, laboratory_id=2, operator_id=2,
             available_from_date=date(2025, 1, 1), available_to_date=date(2025, 12, 31),
             available_from_time=time(9, 0), available_to_time=time(17, 0),
             available_weekday=3, slot_duration_minutes=20, pause_minutes=5, enabled=True

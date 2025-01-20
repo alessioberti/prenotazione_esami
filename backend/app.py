@@ -17,6 +17,8 @@ from operators_availability import generate_availabile_slots
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "supersegreto123"
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
+
 jwt = JWTManager(app)
 logging.basicConfig(level=logging.INFO)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -106,37 +108,28 @@ def logout():
 @jwt_required()
 def get_slots_availability():
    
-    datetime_from_filter = request.args.get('datetime_from_filter')
-    datetime_to_filter = request.args.get('datetime_to_filter'),
-    exam_type_id = request.args.get('exam_type_id', type=int)
-    operator_id = request.args.get('operator_id', type=int)
-    laboratory_id = request.args.get('laboratory_id', type=int)
-
-    # Imposta un controllo sulla data di partenza della verifica delle disponibilità che non può essere nel passato o nel giorno corrente
-    first_reservation_datetime = datetime.combine(datetime.now(() + timedelta(days=1)).date(), time(0, 0))
+    # Imposta i valori di default per i filtri dalla data di oggi a 60 giorni avanti
     
-    # Se viene richiesta una data superiore può essere inserita quella 
+    first_reservation_datetime = datetime.combine((datetime.now() + timedelta(days=1)).date(), time(0, 0))
+    last_reservation_datetime = datetime.combine((datetime.now() + timedelta(days=365)).date(), time(0, 0))
 
-    if datetime_from_filter:
-        try:
-            datetime_from_filter = max((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S')), first_reservation_datetime)
-        except ValueError:
-            return jsonify({"error": "Invalid from datetime format. Use YYYY-MM-DD HH:MM:SS"}), 400
-    else:
-        datetime_from_filter = first_reservation_datetime
-
-    # Immposta un controllo sulla data massima di generazione degli slot a 60 giorni dalla data odierna
-    last_reservation_datetime = datetime.combine(datetime.now(() + timedelta(days=60)).date(), time(0, 0))
-
-    # se viene inserita una data infeririore può essere inserita quella
-
-    if datetime_from_filter:
-        try:
-            datetime_to_filter = min((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S')), last_reservation_datetime)
-        except ValueError:
-            return jsonify({"error": "Invalid from datetime format. Use YYYY-MM-DD HH:MM:SS"}), 400
-    else:
-        datetime_to_filter = last_reservation_datetime
+    # se i filtri sono presenti, sovrascrivi i valori di default se all'interno del range dei filtri di default
+    try:
+        if request.args.get('datetime_from_filter'):
+            datetime_from_filter = max(
+                datetime.fromisoformat(request.args.get('datetime_from_filter')), first_reservation_datetime)
+        else:
+            datetime_from_filter = first_reservation_datetime
+        if request.args.get('datetime_to_filter'):
+            datetime_to_filter = min(
+                datetime.fromisoformat(request.args.get('datetime_to_filter')),last_reservation_datetime)
+        else:
+            datetime_to_filter = last_reservation_datetime 
+        exam_type_id = request.args.get('exam_type_id', type=int)
+        operator_id = request.args.get('operator_id', type=int)
+        laboratory_id = request.args.get('laboratory_id', type=int)
+    except (ValueError):
+        return jsonify({"error": "Missing key or invalid value format"}), 400
 
     logging.info("data inizio generazione slot: %s", datetime_from_filter)
     logging.info("data fine generazione slot: %s", datetime_to_filter)
@@ -210,8 +203,17 @@ def get_slots_availability():
         availability = session.execute(availability_query).scalars().all()
 
         try:
-            slots = generate_availabile_slots(availability, datetime_from_filter, laboratory_closures, operator_absences, booked_slots)
+            slots = generate_availabile_slots(
+                availability, # disponibilità degli operatori
+                datetime_from_filter, # data di inizio filtro
+                datetime_to_filter, # data di fine filtro          
+                laboratory_closures, # periodi di chiusura dei laboratori
+                operator_absences, # periodi di assenza degli operatori
+                booked_slots # slot già prenotati
+            )
+
             logging.info("Slots generated: %s", len(slots))
+
             return jsonify(slots), 200
         except Exception as e:
             logging.error("Error in slot conversion:\n%s", traceback.format_exc())
