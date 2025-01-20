@@ -1,13 +1,12 @@
 from typing import List, Optional
 from flask_login import UserMixin
-from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean
+from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-
 from datetime import datetime, date, time
-
+import uuid
 
 #https://docs.sqlalchemy.org/en/20/tutorial/metadata.html#tutorial-working-with-metadata
 #https://www.digitalocean.com/community/tutorials/how-to-add-authentication-to-your-app-with-flask-login
@@ -20,13 +19,18 @@ class Base(DeclarativeBase):
 class Account(Base):
     __tablename__ = "account"
 
-    account_id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4())
+    )
+    #account_id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     email: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     tel_number: Mapped[str] = mapped_column(String(30))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    failed_login_count: Mapped[int] = mapped_column(int, default=0)
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
     last_failed_login: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
 # Tabella gestione Laboratori

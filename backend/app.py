@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager
+from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager, decode_token
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session 
@@ -10,6 +10,8 @@ from operators_availability import generate_availabile_slots
 from werkzeug.security import check_password_hash, generate_password_hash
 import re
 from zoneinfo import ZoneInfo
+from flask_cors import CORS
+
 
 #https://flask.palletsprojects.com/en/stable/quickstart/
 #https://flask-login.readthedocs.io/en/latest/
@@ -19,19 +21,8 @@ app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "supersegreto123"
 jwt = JWTManager(app)
 logging.basicConfig(level=logging.INFO)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 BLOCKLIST = set()
-@jwt.token_in_blocklist_loader
-def check_if_token_in_blocklist(jwt_header, jwt_payload):
-    return jwt_payload["jti"] in BLOCKLIST
-
-@jwt.revoked_token_loader
-def revoked_token_callback(jwt_header, jwt_payload):
-    return (
-        jsonify(
-            {"description": "The token has been revoked.", "error": "token_revoked"}
-        ),
-        401,
-    )
 
 @app.post("/register")
 def register():
@@ -39,26 +30,23 @@ def register():
     if not new_account:
         return jsonify({"Request invalid":"missing JSON body"}), 400
 
-    username_regex = r'^[0-9A-Za-z]{6,16}$'
+    #username_regex = r'^[0-9A-Za-z]{6,16}$'
     password_regex = r'^(?=.*?[0-9])(?=.*?[A-Za-z]).{8,32}$'
     email_regex    = r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
     tel_number_regex = r'^\+?\d{10,13}$'
 
-
-    if not re.match(username_regex, new_account.get("username")):
-        return jsonify({"error": "Invalid username"}), 400
+    #if not re.match(username_regex, new_account.get("username")):
+    #    return jsonify({"error": "Invalid username"}), 400
     if not re.match(password_regex, new_account.get("password")):
         return jsonify({"error": "Invalid password"}), 400
     if not re.match(email_regex, new_account.get("email")):
         return jsonify({"error": "Invalid email"}), 400
-    if not re.match(tel_number_regex, new_account.get("tel_number")):
-        return jsonify({"error": "Invalid tel_number"}), 400
+    #if not re.match(tel_number_regex, new_account.get("tel_number")):
+       # return jsonify({"error": "Invalid tel_number"}), 400
     
-    pw_hash = generate_password_hash(new_account.get("password"))
-
     new_account = Account(
         username=new_account.get("username"),
-        password_hash=pw_hash,
+        password_hash = generate_password_hash(new_account.get("password")),
         email=new_account.get("email"),
         tel_number=new_account.get("tel_number")
     )
@@ -127,7 +115,7 @@ def get_slots_availability():
 
     # Imposta un controllo sulla data di partenza della verifica delle disponibilità che non può essere nel passato o nel giorno corrente
     # può essere richiesta la disponibità dalla data successiva alla data odierna
-    first_reservation_datetime = datetime.combine((datetime.now('Europe/Rome') + timedelta(days=1)).date(), time(0, 0))
+    first_reservation_datetime = datetime.combine((datetime.now(ZoneInfo('Europe/Rome')) + timedelta(days=1)).date(), time(0, 0))
     if datetime_from_filter:
         try:
             datetime_from_filter = max((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S')), first_reservation_datetime)
@@ -216,15 +204,19 @@ def get_slots_availability():
 @jwt_required()
 def get_operators():
 
-    operator_id = request.args.get("operator_id", type=int)
+    exam_id = request.args.get("exam_id")
+    laboratory_id = request.args.get("laboratory_id")
 
     with Session(engine) as session:
         
-        operators_query = select(Operator)
-        if operator_id:
-            operators_query = operators_query.where(Operator.operator_id == operator_id)
+        operators_query = select(Operator).join(OperatorsAvailability, OperatorsAvailability.operator_id == Operator.operator_id).distinct()
 
-        operators= session.execute(operators_query).scalars().all()
+        if exam_id:
+            operators_query = operators_query.where(OperatorsAvailability.exam_type_id == exam_id)
+        if laboratory_id:
+            operators_query = operators_query.where(OperatorsAvailability.laboratory_id == laboratory_id)  
+
+        operators = session.execute(operators_query).scalars().all()
 
         operators_list = []
         for operator in operators:
@@ -238,14 +230,12 @@ def get_operators():
 @app.get("/exam_types")
 @jwt_required()
 def get_exam_types():
-    exam_type_id = request.args.get("exam_type_id", type=int)
 
+    current_user = get_jwt_identity()  # Ottieni l'utente corrente dal token
+    logging.error(f"Richiesta ricevuta da utente: {current_user}")
     with Session(engine) as session:
 
         exam_types_query = select(ExamType)
-        if exam_type_id:
-            exam_types_query = exam_types_query.where(ExamType.exam_type_id == exam_type_id)
-
         exam_types = session.execute(exam_types_query).scalars().all()
 
         exam_types_list = []
@@ -261,13 +251,18 @@ def get_exam_types():
 @app.get("/laboratories")
 @jwt_required()
 def get_laboratories():
-    laboratory_id = request.args.get("laboratory_id", type=int)
+
+    exam_id = request.args.get("exam_id")
+    operator_id = request.args.get("operator_id")
 
     with Session(engine) as session:
+        
+        laboratories_query = select(Laboratory).join(OperatorsAvailability, Laboratory.laboratory_id == OperatorsAvailability.laboratory_id).distinct()
 
-        laboratories_query = select(Laboratory)
-        if laboratory_id:
-            laboratories_query = laboratories_query.where(Laboratory.laboratory_id == laboratory_id)
+        if exam_id:
+            laboratories_query = laboratories_query.where(OperatorsAvailability.exam_type_id == exam_id)
+        if operator_id:
+            laboratories_query = laboratories_query.where(OperatorsAvailability.operator_id == operator_id)  
 
         laboratories = session.execute(laboratories_query).scalars().all()
 
@@ -319,8 +314,7 @@ def book_slot():
             session.rollback()
             return jsonify({"error": "Integrity Error"})
         return jsonify({"message": "Booking Complete"}), 200
-    
-        
+         
 @app.get("/slot_bookings")
 @jwt_required()
 def get_booked_slots():
