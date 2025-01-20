@@ -1,5 +1,4 @@
 from typing import List, Optional
-from flask_login import UserMixin
 from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import create_engine
@@ -56,7 +55,6 @@ class LaboratoryClosure(Base):
     start_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     end_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-
 # Tabella di gestione dei tipi di esame
 class ExamType(Base):
     __tablename__ = "exam_types"
@@ -100,7 +98,7 @@ class OperatorsAvailability(Base):
     available_to_date: Mapped[date] = mapped_column(Date, nullable=False)
     available_from_time: Mapped[time] = mapped_column(Time, nullable=False)
     available_to_time: Mapped[time] = mapped_column(Time, nullable=False)
-    available_weekday: Mapped[int] = mapped_column(nullable=False) # 0: Lunedì...6:Domenica
+    available_weekday: Mapped[int] = mapped_column(nullable=False)
     slot_duration_minutes: Mapped[int] = mapped_column(nullable=False)
     pause_minutes: Mapped[int] = mapped_column(nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

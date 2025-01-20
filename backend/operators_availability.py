@@ -38,10 +38,10 @@ def operator_is_absent(operator_id, operator_availability_date ,operator_availab
     return False
 
 #funzione per generare slot prenotabili a partire dalle disponibilità degli operatori datetime_from_filter viene utilizzato come parametro nella route per non fornire date nel passato
-def generate_availabile_slots(operators_availability, datetime_from_filter = None, laboratory_closures = None, operator_absences = None, booked_slots = None):
-    # definizione dell'array che coneterrà gli slot generati
+def generate_availabile_slots(operators_availability, datetime_from_filter = None, datetime_to_filter = None, laboratory_closures = None, operator_absences = None, booked_slots = None):
+    
     operators_availability_slots = []
-    # esamina ogni operator_availability rule
+    
     for operator_availability in operators_availability:
 
         logging.info(
@@ -53,18 +53,22 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
         )
 
         # se datetime_from_filter è impostato filtra la disponibilià degli esami partendo da quella data (se maggiore)
-        if  isinstance(datetime_from_filter, datetime) and datetime_from_filter.date() > operator_availability.available_from_date:
-            operator_availability_date = datetime_from_filter.date()
+        if  isinstance(datetime_from_filter, datetime):
+            operator_availability_date = max(operator_availability.available_from_date, datetime_from_filter.date())
         else:
             operator_availability_date = operator_availability.available_from_date
 
-        logging.info(" - Calcolo gli slot slot per il giorno %s", operator_availability_date)
+        # se datetime_to_filter è impostato filtra la disponibilità degli esami fino a quella data (se inferiore)
+        if  isinstance(datetime_to_filter, datetime):
+            operator_availability_maxdate = min(datetime_to_filter, operator_availability.available_to_date)
+        else:
+            operator_availability_maxdate = operator_availability.available_from_date
 
         # sposta operator_availability date al primo giorno della settimana indicato nella operator_availability
         operator_availability_date += timedelta(days=((operator_availability.available_weekday - operator_availability_date.weekday()) % 7))
         # per ciascun giorno fino a fine disponibilià compresa 
-        while operator_availability_date <= operator_availability.available_to_date:
-            # imposta la partenza del primo slot sempre all'orario di partenza delle disponibiltà
+        while operator_availability_date <= operator_availability_maxdate:
+            # imposta la partenza del primo slot sempre all'orario di partenza delle disponibiltà (necessario per generare gli slot in modo univoco)
             operator_availability_slot_start = operator_availability.available_from_time
             # per ciascun giorno crea gli slot in fino all'ora di di fine disponibilità
             while operator_availability_slot_start < operator_availability.available_to_time:

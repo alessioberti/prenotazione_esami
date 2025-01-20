@@ -4,14 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session 
 from datetime import date, datetime, time, timedelta
-from database import engine, OperatorsAvailability, Operator, Laboratory, SlotBooking, LaboratoryClosure, OperatorAbsence, ExamType, Account
 import logging, traceback
-from operators_availability import generate_availabile_slots
 from werkzeug.security import check_password_hash, generate_password_hash
 import re
-from zoneinfo import ZoneInfo
 from flask_cors import CORS
-
+from database import engine, OperatorsAvailability, Operator, Laboratory, SlotBooking, LaboratoryClosure, OperatorAbsence, ExamType, Account
+from operators_availability import generate_availabile_slots
 
 #https://flask.palletsprojects.com/en/stable/quickstart/
 #https://flask-login.readthedocs.io/en/latest/
@@ -109,18 +107,19 @@ def logout():
 def get_slots_availability():
    
     datetime_from_filter = request.args.get('datetime_from_filter')
+    datetime_to_filter = request.args.get('datetime_to_filter'),
     exam_type_id = request.args.get('exam_type_id', type=int)
     operator_id = request.args.get('operator_id', type=int)
     laboratory_id = request.args.get('laboratory_id', type=int)
 
     # Imposta un controllo sulla data di partenza della verifica delle disponibilità che non può essere nel passato o nel giorno corrente
-    # può essere richiesta la disponibità dalla data successiva alla data odierna
-    first_reservation_datetime = datetime.combine((datetime.now(ZoneInfo('Europe/Rome')) + timedelta(days=1)).date(), time(0, 0))
+    first_reservation_datetime = datetime.combine(datetime.now(() + timedelta(days=1)).date(), time(0, 0))
+  
     if datetime_from_filter:
         try:
             datetime_from_filter = max((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S')), first_reservation_datetime)
         except ValueError:
-            return jsonify({"error": "Invalid datetime format. Use YYYY-MM-DD HH:MM:SS"}), 400
+            return jsonify({"error": "Invalid from datetime format. Use YYYY-MM-DD HH:MM:SS"}), 400
     else:
         datetime_from_filter = first_reservation_datetime
 
