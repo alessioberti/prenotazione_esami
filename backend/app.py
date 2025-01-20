@@ -114,7 +114,9 @@ def get_slots_availability():
 
     # Imposta un controllo sulla data di partenza della verifica delle disponibilità che non può essere nel passato o nel giorno corrente
     first_reservation_datetime = datetime.combine(datetime.now(() + timedelta(days=1)).date(), time(0, 0))
-  
+    
+    # Se viene richiesta una data superiore può essere inserita quella 
+
     if datetime_from_filter:
         try:
             datetime_from_filter = max((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S')), first_reservation_datetime)
@@ -123,7 +125,21 @@ def get_slots_availability():
     else:
         datetime_from_filter = first_reservation_datetime
 
-    logging.info("datetime_from_filter calcolato: %s", datetime_from_filter)
+    # Immposta un controllo sulla data massima di generazione degli slot a 60 giorni dalla data odierna
+    last_reservation_datetime = datetime.combine(datetime.now(() + timedelta(days=60)).date(), time(0, 0))
+
+    # se viene inserita una data infeririore può essere inserita quella
+
+    if datetime_from_filter:
+        try:
+            datetime_to_filter = min((datetime.strptime(datetime_from_filter, '%Y-%m-%d %H:%M:%S')), last_reservation_datetime)
+        except ValueError:
+            return jsonify({"error": "Invalid from datetime format. Use YYYY-MM-DD HH:MM:SS"}), 400
+    else:
+        datetime_to_filter = last_reservation_datetime
+
+    logging.info("data inizio generazione slot: %s", datetime_from_filter)
+    logging.info("data fine generazione slot: %s", datetime_to_filter)
 
     # tramite la sessione crea la availability_query
     with Session(engine) as session:
@@ -135,6 +151,8 @@ def get_slots_availability():
              exam_type_id, operator_id, laboratory_id, datetime_from_filter
         )
 
+        # Query per gli slot già prenotati
+
         booked_slots_query = (
             select(SlotBooking)
             .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
@@ -142,7 +160,7 @@ def get_slots_availability():
         )
 
         if datetime_from_filter:
-            booked_slots_query = booked_slots_query.where(SlotBooking.appointment_datetime_end >= datetime_from_filter)
+            booked_slots_query = booked_slots_query.where(SlotBooking.appointment_date >= datetime_from_filter.date())
         if exam_type_id:
             booked_slots_query = booked_slots_query.where(OperatorsAvailability.exam_type_id == exam_type_id)
         if operator_id:
@@ -287,12 +305,10 @@ def book_slot():
         return jsonify({"error": "Missing JSON body"}), 400
 
     try:
-        operator_availability_slot_start=time.fromisoformat(slot["operator_availability_slot_start"])
-        operator_availability_slot_end=time.fromisoformat(slot["operator_availability_slot_end"])
-        operator_availability_date=date.fromisoformat(slot["operator_availability_date"])
-        appointment_datetime_start = datetime.combine(operator_availability_date, operator_availability_slot_start)
-        appointment_datetime_end = datetime.combine(operator_availability_date, operator_availability_slot_end)
-
+        appointment_time_start = time.fromisoformat(slot["operator_availability_slot_start"])
+        appointment_time_end  =time.fromisoformat(slot["operator_availability_slot_end"])
+        appointment_date = date.fromisoformat(slot["operator_availability_date"])
+        
     except (KeyError, ValueError):
         return jsonify({"error": "Missing key or invalid value format"}), 400
 
@@ -301,8 +317,9 @@ def book_slot():
         new_booking = SlotBooking(
             account_id=current_user,
             availability_id=slot.get("availability_id"),
-            appointment_datetime_start = appointment_datetime_start,
-            appointment_datetime_end = appointment_datetime_end,
+            appointment_time_start = appointment_time_start,
+            appointment_datetime_end = appointment_time_end,
+            appointment_date = appointment_date,
             rejected=slot.get("rejected", False)
         )
 
@@ -330,8 +347,9 @@ def get_booked_slots():
             slots_list.append({
                 "slot_id": slot.slot_id,
                 "availability_id": slot.availability_id,
-                "appointment_datetime_start": slot.appointment_datetime_start.isoformat(),
-                "appointment_datetime_end": slot.appointment_datetime_end.isoformat(),
+                "appointment_date": slot.appointment_date.isoformat(),
+                "appointment_time_start": slot.appointment_time_start.isoformat(),
+                "appointment_time_end": slot.appointment_time_end.isoformat(),
                 "rejected": slot.rejected
             })
 

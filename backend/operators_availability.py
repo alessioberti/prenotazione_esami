@@ -14,10 +14,9 @@ def slot_is_booked(operator_availability_id, operator_availability_date, operato
     for booked_slot in booked_slots:
         if (
             operator_availability_id == booked_slot.availability_id and 
-            
-            datetime.combine(operator_availability_date, operator_availability_slot_start) == booked_slot.appointment_datetime_start and
-            datetime.combine(operator_availability_date, operator_availability_slot_end) == booked_slot.appointment_datetime_end):   
-      
+            operator_availability_date == booked_slot.appointment_date and
+            operator_availability_slot_start == booked_slot.appointment_time_start
+        ):
             return True
     return False
 
