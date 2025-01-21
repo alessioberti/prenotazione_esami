@@ -10,6 +10,7 @@
     <!-- Se l'array bookings è vuoto -->
     <div v-if="bookings.length === 0">
       <p>Non hai ancora prenotazioni.</p>
+      <button @click="goBack">Indietro</button>
     </div>
     <div v-else>
       <!-- Elenco (o tabella) delle prenotazioni -->
@@ -48,6 +49,7 @@
           </tr>
         </tbody>
       </table>
+      <button @click="goBack">Indietro</button>
     </div>
 
     <!-- Modale di conferma annullamento -->
@@ -72,12 +74,20 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '../composables/useApi'
+import { useRouter } from 'vue-router'
 
 /**
  * Questo componente mostra le prenotazioni dell'utente loggato,
  * e consente di "cancellarle" (impostare rejected=true) chiamando:
  * PUT /book_slot/<appointment_id>/reject
  */
+//tasto indietro
+
+const router = useRouter()
+function goBack() {
+  router.back()
+}
+
 
 // Stato locale
 const bookings = ref([])         // lista prenotazioni

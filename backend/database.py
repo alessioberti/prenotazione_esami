@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean, Integer
+from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean, Integer, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -12,7 +12,6 @@ import uuid
 
 class Base(DeclarativeBase):
     pass
-
 
 # Tabella Gestione degli account 
 class Account(Base):
@@ -123,6 +122,9 @@ class SlotBooking(Base):
     
     # Relazioni
     operators_availability: Mapped["OperatorsAvailability"] = relationship(back_populates="slot_bookings")
+
+    # Unique Constraint (necessario per evitare le duplicazioni delle prenotazioni)
+    __table_args__ = (UniqueConstraint("availability_id", "appointment_date", "appointment_time_start"),)
 
 engine = create_engine("sqlite:///database.db", echo=False)
 

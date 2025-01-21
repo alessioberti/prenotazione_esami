@@ -23,6 +23,7 @@
       >
         Avanti
       </button>
+      <button @click="goBack">Indietro</button>
     </div>
   </template>
   
@@ -30,7 +31,6 @@
   import { onMounted, ref } from 'vue'
   import { useRouter } from 'vue-router'
   import api from '../composables/useApi'
-  
   const router = useRouter()
   
   // Stato
@@ -49,6 +49,12 @@
     }
   }
   
+  // tasto indietro
+  function goBack() {
+    router.back()
+  
+  }
+
   function goToSlotsPage() {
     // Passiamo examTypeId e startDate come query param (o param)
     router.push({
