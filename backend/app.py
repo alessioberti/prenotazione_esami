@@ -307,7 +307,6 @@ def book_slot():
         return jsonify({"error": "Missing JSON body"}), 400
     
     # verifica la presenza di tutti i campi obbligatori necessari per la prenotazione
-
     try:
         appointment_time_start = time.fromisoformat(slot["operator_availability_slot_start"])
         appointment_time_end  =time.fromisoformat(slot["operator_availability_slot_end"])
@@ -329,10 +328,11 @@ def book_slot():
             .where(SlotBooking.account_id == current_user)
             .where(OperatorsAvailability.exam_type_id == exam_type_id)
         )
-
+        # vincolo applicativo un utente non può prenotare più volte lo stesso esame
+        # viene utilizzato un codice specifico per utilizzare un messaggio specifico in forntend
         same_exam_booked = session.execute(booked_slots_query).scalars().all()
         if same_exam_booked:
-            return jsonify({"error": "exam type already booked"}), 409
+            return jsonify({"error": "exam type already booked"}), 409 
 
         new_booking = SlotBooking(
             account_id=current_user,
@@ -348,7 +348,7 @@ def book_slot():
             session.commit()
         except IntegrityError:
             session.rollback()
-            return jsonify({"error": "Integrity Error"})
+            return jsonify({"error": "Integrity Error"}), 400
         return jsonify({"message": "Booking Complete"}), 200
          
 @app.get("/slot_bookings")

@@ -255,10 +255,10 @@
         console.error('Errore prenotazione slot:', err)
         if (err.response?.status === 409) {
           // Errore specifico: utente ha già prenotato lo stesso esame
-          errorMessage.value = 'Hai già prenotato questo esame!'
+          errorMessage.value = 'Risulta una prenotazione attiva per questo esame'
         } else {
           // Errore generico
-          errorMessage.value = err.response?.data?.error || 'Errore durante la prenotazione'
+          errorMessage.value = err.response?.data?.error || 'Si verificato un errore durante la prenotazione o la prenotazione non è più dispoibile ti invitiamo a riprovare'
         }
       }
     }
