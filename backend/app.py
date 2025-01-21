@@ -209,7 +209,7 @@ def get_slots_availability():
                 datetime_to_filter, # data di fine filtro          
                 laboratory_closures, # periodi di chiusura dei laboratori
                 operator_absences, # periodi di assenza degli operatori
-                booked_slots # slot già prenotati
+                booked_slots # slot già prenotati 
             )
 
             logging.info("Slots generated: %s", len(slots))
@@ -305,24 +305,42 @@ def book_slot():
 
     if not slot:
         return jsonify({"error": "Missing JSON body"}), 400
+    
+    # verifica la presenza di tutti i campi obbligatori necessari per la prenotazione
 
     try:
         appointment_time_start = time.fromisoformat(slot["operator_availability_slot_start"])
         appointment_time_end  =time.fromisoformat(slot["operator_availability_slot_end"])
         appointment_date = date.fromisoformat(slot["operator_availability_date"])
-        
+        availability_id = slot.get("availability_id")
+        rejected=slot.get("rejected", False)
+        exam_type_id = slot.get("exam_type_id")
+
     except (KeyError, ValueError):
         return jsonify({"error": "Missing key or invalid value format"}), 400
 
     with Session(engine) as session:
 
+        # non è possibile prenotare lo stesso esame due volte
+        booked_slots_query = (
+            select(SlotBooking)
+            .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
+            .where(SlotBooking.rejected == False)
+            .where(SlotBooking.account_id == current_user)
+            .where(OperatorsAvailability.exam_type_id == exam_type_id)
+        )
+
+        same_exam_booked = session.execute(booked_slots_query).scalars().all()
+        if same_exam_booked:
+            return jsonify({"error": "exam type already booked"}), 409
+
         new_booking = SlotBooking(
             account_id=current_user,
-            availability_id=slot.get("availability_id"),
+            availability_id=availability_id,
             appointment_time_start = appointment_time_start,
-            appointment_datetime_end = appointment_time_end,
+            appointment_time_end = appointment_time_end,
             appointment_date = appointment_date,
-            rejected=slot.get("rejected", False)
+            rejected=rejected
         )
 
         try:
@@ -341,14 +359,25 @@ def get_booked_slots():
 
     with Session(engine) as session:
 
-        booked_slots_query = select(SlotBooking).where(SlotBooking.account_id == current_user)
+        booked_slots_query = (
+            select(SlotBooking)
+            .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
+            .where(SlotBooking.account_id == current_user)
+        )
+        
         booked_slots = session.execute(booked_slots_query).scalars().all()
 
         slots_list = []
         for slot in booked_slots:
             slots_list.append({
-                "slot_id": slot.slot_id,
+                "appointment_id": slot.appointment_id,
                 "availability_id": slot.availability_id,
+                "exam_type_id": slot.operators_availability.exam_type_id,
+                "laboratory_id": slot.operators_availability.laboratory_id,
+                "operator_id": slot.operators_availability.operator_id,
+                "operator_name": slot.operators_availability.operator.name,
+                "exam_type_name": slot.operators_availability.exam_type.name,
+                "laboratory_name": slot.operators_availability.laboratory.name,
                 "appointment_date": slot.appointment_date.isoformat(),
                 "appointment_time_start": slot.appointment_time_start.isoformat(),
                 "appointment_time_end": slot.appointment_time_end.isoformat(),
@@ -357,14 +386,14 @@ def get_booked_slots():
 
     return jsonify(slots_list), 200
 
-@app.delete("/book_slot/<int:slot_id>")
+@app.delete("/book_slot/<int:appointment_id>")
 @jwt_required()
-def delete_booked_slot(slot_id):
+def delete_booked_slot(appointment_id):
 
     current_user = get_jwt_identity()
     
     with Session(engine) as session:
-        slot_query = select(SlotBooking).where(SlotBooking.slot_id == slot_id)
+        slot_query = select(SlotBooking).where(SlotBooking.appointment_id == appointment_id)
         slot = session.execute(slot_query).scalars().first()
 
         if not slot:
@@ -378,5 +407,23 @@ def delete_booked_slot(slot_id):
 
         return jsonify({"Success": "Slot deleted"}), 200
     
+@app.put("/book_slot/<int:appointment_id>/reject")
+@jwt_required()
+def reject_booked_slot(appointment_id):
 
+    current_user = get_jwt_identity()
+    
+    with Session(engine) as session:
+        slot_query = select(SlotBooking).where(SlotBooking.appointment_id == appointment_id)
+        slot = session.execute(slot_query).scalars().first()
 
+        if not slot:
+            return jsonify({"error": "Slot not found"}), 404
+        
+        if not slot.account_id == current_user:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        slot.rejected = True
+        session.commit()
+
+        return jsonify({"Success": "Slot Rejected"}), 200
