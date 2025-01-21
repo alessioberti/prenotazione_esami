@@ -1,7 +1,6 @@
 <template>
-  <div>
-    <h1>Gestione Prenotazioni</h1>
-    <router-view /> <!-- Mostra il contenuto della route corrente -->
+  <div id="app">
+    <router-view />
   </div>
 </template>
 
@@ -10,3 +9,14 @@ export default {
   name: "App",
 };
 </script>
+
+<style>
+/* Stile di base per il contenitore principale */
+#app {
+  font-family: Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+}
+</style>
