@@ -1,17 +1,82 @@
-import { createRouter, createWebHistory } from "vue-router";
-import Login from "../components/Login.vue";
-import Home from "../components/Home.vue";
-import NewBooking from "../components/NewBooking.vue";
+import { createRouter, createWebHistory } from 'vue-router'
+import LoginView from '../views/LoginView.vue'
+import RegisterView from '../views/RegisterView.vue'
+import ForgotView from '../views/ForgotView.vue'
+import DashboardView from '../views/DashboardView.vue'
+import ExamSelection from '../views/ExamSelection.vue'
+import BookView from '../views/BookView.vue'
+import ManageView from '../views/ManageView.vue'
+import { useAuth } from '../composables/useAuth'
 
+// Definizione delle rotte
 const routes = [
-  { path: "/", name: "Login", component: Login },
-  { path: "/home", name: "Home", component: Home },
-  { path: "/new-booking", name: "NewBooking", component: NewBooking },
-];
+  {
+    path: '/',
+    name: 'home',
+
+    beforeEnter: (to, from, next) => {
+      const { isLoggedIn } = useAuth()
+      if (isLoggedIn.value) {
+        next({ name: 'dashboard' })
+      } else {
+        next({ name: 'login' })
+      }
+    }
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: LoginView
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: RegisterView
+  },
+  {
+    path: '/forgot',
+    name: 'forgot',
+    component: ForgotView
+  },
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: DashboardView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/book',
+    name: 'book',
+    component: ExamSelection,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/slots',
+    name: 'slots',
+    component: BookView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/manage',
+    name: 'manage',
+    component: ManageView,
+    meta: { requiresAuth: true }
+  }
+]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes,
-});
+  routes
+})
 
-export default router;
+
+router.beforeEach((to, from, next) => {
+  const { isLoggedIn } = useAuth()
+  if (to.meta.requiresAuth && !isLoggedIn.value) {
+    next({ name: 'login' })
+  } else {
+    next()
+  }
+})
+
+export default router

@@ -17,7 +17,6 @@ class Base(DeclarativeBase):
 # Tabella Gestione degli account 
 class Account(Base):
     __tablename__ = "account"
-
     account_id: Mapped[str] = mapped_column(
         String(36),
         primary_key=True,
@@ -115,7 +114,7 @@ class SlotBooking(Base):
     __tablename__ = "slot_bookings"
 
     appointment_id: Mapped[int] = mapped_column(primary_key=True)
-    account_id: Mapped[Optional[int]] = mapped_column(ForeignKey("account.account_id"))
+    account_id: Mapped[String] = mapped_column(ForeignKey("account.account_id"))
     availability_id: Mapped[int] = mapped_column(ForeignKey("operators_availability.availability_id"), nullable=False)
     appointment_date: Mapped[date] = mapped_column(Date, nullable=False)
     appointment_time_start: Mapped[time] = mapped_column(Time, nullable=False)

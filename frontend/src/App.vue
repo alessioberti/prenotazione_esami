@@ -1,22 +1,19 @@
 <template>
-  <div id="app">
+  <div>
+    <!-- Potresti mettere un header comune qui, se serve -->
     <router-view />
   </div>
 </template>
 
-<script>
-export default {
-  name: "App",
-};
+<script setup>
+// Nessuna logica specifica qui per ora
 </script>
 
 <style>
-/* Stile di base per il contenitore principale */
-#app {
-  font-family: Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
+/* Stili globali minimi, se vuoi */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 </style>
