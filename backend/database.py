@@ -1,14 +1,27 @@
+import os
+import uuid
 from typing import List, Optional
-from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean, Integer, UniqueConstraint
+from sqlalchemy import ForeignKey, String, Date, Time, DateTime, Boolean, Integer, Index, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import UUID, VARCHAR
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, date, time
-import uuid
+from dotenv import load_dotenv
 
 #https://docs.sqlalchemy.org/en/20/tutorial/metadata.html#tutorial-working-with-metadata
 #https://www.digitalocean.com/community/tutorials/how-to-add-authentication-to-your-app-with-flask-login
+load_dotenv()
+
+engine = create_engine("sqlite:///database.db", echo=False)
+db_user = os.getenv("POSTGRES_USER")
+db_password = os.getenv("POSTGRES_PASSWORD")
+db_host = os.getenv("POSTGRES_HOST")
+database = os.getenv("POSTGRES_DB")
+engine = create_engine(f"postgresql://{db_user}:{db_password}@{db_host}/{database}", echo=True)
+
+from sqlalchemy.dialects.postgresql import VARCHAR
 
 class Base(DeclarativeBase):
     pass
@@ -16,23 +29,24 @@ class Base(DeclarativeBase):
 # Tabella Gestione degli account 
 class Account(Base):
     __tablename__ = "account"
-    
+
     # viene utilizzato uuid in quanto jwt richiede un campo stringa univoco 
     account_id: Mapped[str] = mapped_column(
-        String(36),
+        UUID(as_uuid=True),
         primary_key=True,
-        default=lambda: str(uuid.uuid4())
+        default=uuid.uuid4,
+        unique=True,
+        nullable=False
     )
-
     username: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    email: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    email: Mapped[str] = mapped_column(String(254), unique=True, nullable=False)
     first_name: Mapped[str] = mapped_column(String(30), nullable=False)
     last_name: Mapped[str] = mapped_column(String(30), nullable=False)
     tel_number: Mapped[str] = mapped_column(String(30))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_failed_login: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    last_failed_login: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
     is_operator: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
@@ -131,15 +145,15 @@ class SlotBooking(Base):
 
     # Vincolo necessario per evitare le duplicazioni di due prenotazioni attive
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_active_appointments",
             "availability_id",
             "appointment_date",
             "appointment_time_start",
-            name="uq_active_appointments",
-            condition="rejected = false"
+            unique=True,
+            postgresql_where=text("NOT rejected"),
         ),
     )
-engine = create_engine("sqlite:///database.db", echo=False)
 
 Base.metadata.create_all(engine)
 

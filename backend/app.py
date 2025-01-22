@@ -1,4 +1,5 @@
 import os
+from uuid import UUID
 from flask import Flask, request, jsonify, make_response
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager, set_access_cookies
 from sqlalchemy import select
@@ -11,13 +12,13 @@ import re
 from flask_cors import CORS
 from database import engine, OperatorsAvailability, Operator, Laboratory, SlotBooking, LaboratoryClosure, OperatorAbsence, ExamType, Account
 from operators_availability import generate_availabile_slots
-
+from dotenv import load_dotenv
 
 #https://flask.palletsprojects.com/en/stable/quickstart/
 #https://flask-login.readthedocs.io/en/latest/
 #https://flask-jwt-extended.readthedocs.io/en/stable/
 
-
+load_dotenv()
 ## variabili di configurazione per la sicurezza dei cookie
 
 JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE")
@@ -174,7 +175,7 @@ def login():
 @jwt_required()
 def mylogin():
 
-    current_user = get_jwt_identity()
+    current_user = UUID(get_jwt_identity())
     with Session(engine) as session:
 
         account_query = select(Account).where(Account.account_id == current_user)
@@ -344,7 +345,7 @@ def get_operators():
 @jwt_required()
 def get_exam_types():
 
-    current_user = get_jwt_identity()  # Ottieni l'utente corrente dal token
+    current_user = UUID(get_jwt_identity())  # Ottieni l'utente corrente dal token
     logging.error(f"Richiesta ricevuta da utente: {current_user}")
     with Session(engine) as session:
 
@@ -395,7 +396,7 @@ def get_laboratories():
 def book_slot():
 
     slot = request.json
-    current_user = get_jwt_identity()
+    current_user = UUID(get_jwt_identity())
 
     if not slot:
         return jsonify({"error": "Missing JSON body"}), 400
@@ -451,7 +452,7 @@ def book_slot():
 @jwt_required()
 def get_booked_slots():
 
-    current_user = get_jwt_identity()
+    current_user = UUID(get_jwt_identity())
 
     with Session(engine) as session:
 
@@ -486,7 +487,7 @@ def get_booked_slots():
 @jwt_required()
 def delete_booked_slot(appointment_id):
 
-    current_user = get_jwt_identity()
+    current_user = UUID(get_jwt_identity())
     
     with Session(engine) as session:
         slot_query = select(SlotBooking).where(SlotBooking.appointment_id == appointment_id)
@@ -495,7 +496,7 @@ def delete_booked_slot(appointment_id):
         if not slot:
             return jsonify({"error": "Slot not found"}), 404
         
-        if not slot.account_id == current_user:
+        if slot.account_id != current_user:
             return jsonify({"error": "Unauthorized"}), 401
 
         session.delete(slot)
@@ -507,7 +508,7 @@ def delete_booked_slot(appointment_id):
 @jwt_required()
 def reject_booked_slot(appointment_id):
 
-    current_user = get_jwt_identity()
+    current_user = UUID(get_jwt_identity())
     
     with Session(engine) as session:
         slot_query = select(SlotBooking).where(SlotBooking.appointment_id == appointment_id)
@@ -516,7 +517,8 @@ def reject_booked_slot(appointment_id):
         if not slot:
             return jsonify({"error": "Slot not found"}), 404
         
-        if not slot.account_id == current_user:
+        if slot.account_id != current_user:
+            logging.error(f"Current user: {current_user}, Slot account_id: {slot.account_id}")
             return jsonify({"error": "Unauthorized"}), 401
 
         slot.rejected = True
