@@ -64,6 +64,8 @@ def set_csrf_cookie(response):
 
 """
 
+
+
 logging.basicConfig(level=logging.INFO)
 CORS(
   app,
@@ -74,23 +76,28 @@ BLOCKLIST = set()
 
 @app.post("/register")
 def register():
+ 
     new_account = request.json
     if not new_account:
         return jsonify({"Request invalid":"missing JSON body"}), 400
 
-    #username_regex = r'^[0-9A-Za-z]{6,16}$'
-    password_regex = r'^(?=.*?[0-9])(?=.*?[A-Za-z]).{8,32}$'
+    #Caratteri e numeri da 6 a 30 caratteri
+    username_regex = r'^[0-9A-Za-z]{6,30}$'
+    #Almeno una lettera maiuscola, una minuscola, un numero e un simbolo lunghezza da 8 a 32 caratteri
+    password_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,32}$'
+    #Email valida
     email_regex    = r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
+    #Numero di telefono internazionale
     tel_number_regex = r'^\+?\d{10,13}$'
 
-    #if not re.match(username_regex, new_account.get("username")):
-    #    return jsonify({"error": "Invalid username"}), 400
-    if not re.match(password_regex, new_account.get("password")):
+    if not re.match(username_regex, new_account.get("username", "")):
+        return jsonify({"error": "Invalid username"}), 400
+    if not re.match(password_regex, new_account.get("password", "")):
         return jsonify({"error": "Invalid password"}), 400
-    if not re.match(email_regex, new_account.get("email")):
+    if not re.match(email_regex, new_account.get("email", "")):
         return jsonify({"error": "Invalid email"}), 400
-    #if not re.match(tel_number_regex, new_account.get("tel_number")):
-       # return jsonify({"error": "Invalid tel_number"}), 400
+    if not re.match(tel_number_regex, new_account.get("tel_number", "")):
+        return jsonify({"error": "Invalid tel_number"}), 400
     
     new_account = Account(
         username=new_account.get("username"),
@@ -106,8 +113,9 @@ def register():
         try:
             session.commit()
             session.refresh(new_account)
-        except IntegrityError:
+        except IntegrityError as e:
             session.rollback()
+            logging.error("Integrity Error: %s", e)
             return jsonify({"error": "Integrity Error"}), 400
 
     return jsonify({"message": "Account created"}), 200
@@ -420,9 +428,11 @@ def book_slot():
         try:
             session.add(new_booking)
             session.commit()
-        except IntegrityError:
+        except IntegrityError as e:
             session.rollback()
+            logging.error("Database Error: %s\n%s", str(e), traceback.format_exc())
             return jsonify({"error": "Integrity Error"}), 400
+        
         return jsonify({"message": "Booking Complete"}), 200
          
 @app.get("/slot_bookings")

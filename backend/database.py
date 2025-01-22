@@ -130,7 +130,7 @@ class SlotBooking(Base):
     operators_availability: Mapped["OperatorsAvailability"] = relationship(back_populates="slot_bookings")
 
     # Vincolo (necessario per evitare le duplicazioni delle prenotazioni)
-    __table_args__ = (UniqueConstraint("availability_id", "appointment_date", "appointment_time_start"),)
+    __table_args__ = (UniqueConstraint("availability_id", "appointment_date", "appointment_time_start", "rejected"),)
 
 engine = create_engine("sqlite:///database.db", echo=False)
 

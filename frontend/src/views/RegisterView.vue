@@ -1,7 +1,6 @@
 <template>
   <div class="register-container">
     <h2>Registrazione</h2>
-
     <form @submit.prevent="handleRegister">
       <div>
         <label for="username">Username</label>
@@ -10,6 +9,8 @@
           type="text"
           v-model="username"
           required
+          maxlength="30"
+          pattern="^[0-9A-Za-z]{6,30}$"
           placeholder="Inserisci username"
         />
       </div>
@@ -20,6 +21,7 @@
           type="email"
           v-model="email"
           required
+          pattern="^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
           placeholder="Inserisci email"
         />
       </div>
@@ -31,7 +33,9 @@
           v-model="password"
           required
           minlength="8"
-          placeholder="Inserisci password"
+          maxlength="32"
+          pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,32}$"
+          placeholder="da 8 a 32 caratteri (Az-09-!@#$%_&*)"
         />
       </div>
       <div>
@@ -41,8 +45,8 @@
           type="text"
           v-model="telNumber"
           required
-          pattern="^\\+?\\d{10,13}$"
-          placeholder="Inserisci numero di telefono"
+          pattern="^\+?\d{10,13}$"
+          placeholder="Inserisci telefono (es. +391234567890)"
         />
       </div>
       <div>
