@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify
-from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager, decode_token
+from flask import Flask, request, jsonify, make_response
+from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager, set_access_cookies
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session 
@@ -15,13 +15,28 @@ from operators_availability import generate_availabile_slots
 #https://flask-login.readthedocs.io/en/latest/
 #https://flask-jwt-extended.readthedocs.io/en/stable/
 
+
+## variabili di configurazione per la sicurezza dei cookie
+
+JWT_COOKIE_SECURE = True
+JWT_COOKIE_SAMESITE = "None"
+FRONTEND_URL = "https://localhost:5173"
+
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "supersegreto123"
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
+app.config['JWT_TOKEN_LOCATION'] = ['cookies']
+app.config['JWT_COOKIE_SECURE'] = JWT_COOKIE_SECURE
+app.config['JWT_COOKIE_SAMESITE'] = JWT_COOKIE_SAMESITE
+app.config['JWT_COOKIE_CSRF_PROTECT'] = True
 
 jwt = JWTManager(app)
 logging.basicConfig(level=logging.INFO)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+CORS(
+  app,
+  resources={r"/*": {"origins": FRONTEND_URL}},
+  supports_credentials=True
+)
 BLOCKLIST = set()
 
 @app.post("/register")
@@ -48,7 +63,9 @@ def register():
         username=new_account.get("username"),
         password_hash = generate_password_hash(new_account.get("password")),
         email=new_account.get("email"),
-        tel_number=new_account.get("tel_number")
+        tel_number=new_account.get("tel_number"),
+        first_name=new_account.get("first_name"),
+        last_name=new_account.get("last_name")
     )
 
     with Session(engine) as session:
@@ -88,7 +105,9 @@ def login():
             session.commit()
 
             access_token = create_access_token(identity=account.account_id)
-            return jsonify(access_token=access_token), 200
+            resp = make_response({"message": "Logged in"})
+            set_access_cookies(resp, access_token)
+            return resp
         
         else:
             account.failed_login_count = account.failed_login_count + 1
@@ -96,7 +115,28 @@ def login():
             session.commit()
 
             return jsonify({"error": "Invalid username or password"}), 401
-            
+
+@app.get("/mylogin")
+@jwt_required()
+def mylogin():
+
+    current_user = get_jwt_identity()
+    with Session(engine) as session:
+
+        account_query = select(Account).where(Account.account_id == current_user)
+        account = session.execute(account_query).scalars().first()
+
+        if not account:
+            return jsonify({"error": "User not found"}), 404
+
+        return jsonify({
+            "username": account.username,
+            "email": account.email,
+            "tel_number": account.tel_number,
+            "first_name": account.first_name,
+            "last_name": account.last_name
+        }), 200
+
 @app.post("/logout")
 @jwt_required()
 def logout():

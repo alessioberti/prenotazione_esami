@@ -16,19 +16,25 @@ class Base(DeclarativeBase):
 # Tabella Gestione degli account 
 class Account(Base):
     __tablename__ = "account"
+    
+    # viene utilizzato uuid in quanto jwt richiede un campo stringa univoco 
     account_id: Mapped[str] = mapped_column(
         String(36),
         primary_key=True,
         default=lambda: str(uuid.uuid4())
     )
-    #account_id: Mapped[int] = mapped_column(primary_key=True)
+
     username: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     email: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    first_name: Mapped[str] = mapped_column(String(30), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(30), nullable=False)
     tel_number: Mapped[str] = mapped_column(String(30))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
     last_failed_login: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    is_operator: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 # Tabella gestione Laboratori
 class Laboratory(Base):
@@ -123,24 +129,23 @@ class SlotBooking(Base):
     # Relazioni
     operators_availability: Mapped["OperatorsAvailability"] = relationship(back_populates="slot_bookings")
 
-    # Unique Constraint (necessario per evitare le duplicazioni delle prenotazioni)
+    # Vincolo (necessario per evitare le duplicazioni delle prenotazioni)
     __table_args__ = (UniqueConstraint("availability_id", "appointment_date", "appointment_time_start"),)
 
 engine = create_engine("sqlite:///database.db", echo=False)
 
 Base.metadata.create_all(engine)
 
-
 with Session(engine) as session:
 
     try:
 
         # Inserimento degli account
-        mrossi = Account(username="mrossi", password_hash="hashpassword1", email="marco.rossi@example.com", tel_number="3401234567")
-        gverdi = Account(username="gverdi", password_hash="hashpassword2", email="giulia.verdi@example.com", tel_number="3402345678")
-        albianchi = Account(username="albianchi", password_hash="hashpassword3", email="alessandro.bianchi@example.com", tel_number="3403456789")
-        esantini = Account(username="esantini", password_hash="hashpassword4", email="elena.santini@example.com", tel_number="3404567890")
-        clombardi = Account(username="clombardi", password_hash="hashpassword5", email="carlo.lombardi@example.com", tel_number="3405678901")
+        mrossi = Account(username="mrossi", password_hash="hashpassword1", email="marco.rossi@example.com", tel_number="3401234567",first_name="Marco",last_name="Rossi")
+        gverdi = Account(username="gverdi", password_hash="hashpassword2", email="giulia.verdi@example.com", tel_number="3402345678",first_name="Giulia",last_name="Verdi")
+        albianchi = Account(username="albianchi", password_hash="hashpassword3", email="alessandro.bianchi@example.com", tel_number="3403456789",first_name="Alessandro",last_name="Bianchi")
+        esantini = Account(username="esantini", password_hash="hashpassword4", email="elena.santini@example.com", tel_number="3404567890",first_name="Elena",last_name="Santini")
+        clombardi = Account(username="clombardi", password_hash="hashpassword5", email="carlo.lombardi@example.com", tel_number="3405678901",first_name="Carlo",last_name="Lombardi")
     
         session.add_all([mrossi, gverdi, albianchi, esantini, clombardi])
     
@@ -214,6 +219,3 @@ with Session(engine) as session:
         session.rollback()
         print(f"Errore di integrità rilevato: {e}")
 
-
-
-    

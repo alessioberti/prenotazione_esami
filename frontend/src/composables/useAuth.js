@@ -1,29 +1,39 @@
 import { ref } from 'vue'
+import api from './useApi' // se esiste
 
-const token = ref(localStorage.getItem('token') || null)
 
-// isLoggedIn è true se esiste un token in memoria
-const isLoggedIn = ref(!!token.value)
+const isLoggedIn = ref(false)
+const userInfo = ref(null)
 
 export function useAuth() {
-  // Funzione per salvare token su login
-  const login = (jwtToken) => {
-    token.value = jwtToken
-    localStorage.setItem('token', jwtToken)
+  const login = async () => {
     isLoggedIn.value = true
+   
+    await getUserInfo()
   }
 
-  // Funzione per rimuovere token su logout
-  const logout = () => {
-    token.value = null
-    localStorage.removeItem('token')
+  const logout = async () => {
+    try {
+      await api.post('/logout')
+    } catch (err) {
+      console.error('Errore logout', err)
+    }
     isLoggedIn.value = false
+    userInfo.value = null
   }
 
-  return {
-    token,
-    isLoggedIn,
-    login,
-    logout
+  const getUserInfo = async () => {
+    try {
+      const resp = await api.get('/mylogin')
+      userInfo.value = resp.data
+      isLoggedIn.value = true
+    } catch (err) {
+      console.error('Errore getUserInfo:', err)
+      isLoggedIn.value = false
+      userInfo.value = null
+      throw err
+    }
   }
+
+  return { isLoggedIn, userInfo, login, logout, getUserInfo }
 }

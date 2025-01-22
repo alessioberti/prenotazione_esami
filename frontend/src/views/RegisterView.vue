@@ -17,6 +17,14 @@
         <label>Telefono</label>
         <input type="text" v-model="telNumber" />
       </div>
+      <div>
+        <label>Nome</label>
+        <input type="text" v-model="first_name" />
+      </div>
+      <div>
+        <label>Cognome</label>
+        <input type="text" v-model="last_name" />
+      </div>
       <button @click="handleRegister">Registrati</button>
   
       <p v-if="error" style="color: red;">{{ error }}</p>
@@ -32,6 +40,8 @@
   const email = ref('')
   const password = ref('')
   const telNumber = ref('')
+  const first_name = ref('')
+  const last_name = ref('')
   const error = ref(null)
   const message = ref(null)
   
@@ -44,7 +54,9 @@
         username: username.value,
         email: email.value,
         password: password.value,
-        tel_number: telNumber.value
+        tel_number: telNumber.value,
+        first_name: first_name.value,
+        last_name: last_name.value
       })
   
       // se non ci sono errori, potresti informare l’utente che la registrazione è avvenuta
