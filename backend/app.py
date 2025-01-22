@@ -1,5 +1,5 @@
+import os
 from flask import Flask, request, jsonify, make_response
-from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager, set_access_cookies
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +12,7 @@ from flask_cors import CORS
 from database import engine, OperatorsAvailability, Operator, Laboratory, SlotBooking, LaboratoryClosure, OperatorAbsence, ExamType, Account
 from operators_availability import generate_availabile_slots
 
+
 #https://flask.palletsprojects.com/en/stable/quickstart/
 #https://flask-login.readthedocs.io/en/latest/
 #https://flask-jwt-extended.readthedocs.io/en/stable/
@@ -19,11 +20,12 @@ from operators_availability import generate_availabile_slots
 
 ## variabili di configurazione per la sicurezza dei cookie
 
-JWT_COOKIE_SECURE = True
-JWT_COOKIE_SAMESITE = "None"
-JWT_SECRET_KEY = "supersegreto123"
-CSFR_SECRET_KEY = "supersegreto123"
-FRONTEND_URL = "https://localhost:5173"
+JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE")
+JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+CSFR_SECRET_KEY = os.getenv("CSFR_SECRET_KEY")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+BACKEND_URL = os.getenv("BACKEND_URL")
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = JWT_SECRET_KEY
@@ -35,6 +37,7 @@ app.config['JWT_COOKIE_SAMESITE'] = JWT_COOKIE_SAMESITE
 jwt = JWTManager(app)
 
 """
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 app.config["SECRET_KEY"] = CSFR_SECRET_KEY
 #app.config["WTF_CSRF_ALLOWED_ORIGINS"] = [FRONTEND_URL]
 app.config["WTF_CSRF_CHECK_REFERRER"] = False
@@ -109,13 +112,22 @@ def register():
     )
 
     with Session(engine) as session:
+        
+        # verifica eventuali username o email già presenti nel database
+        username_query = select(Account).where(Account.username == new_account.username)
+        if session.execute(username_query).scalars().first():
+            return jsonify({"error": "Username already in use"}), 409
+        email_query = select(Account).where(Account.email == new_account.email)
+        if session.execute(email_query).scalars().first():
+            return jsonify({"error": "Email already in use"}), 409
+        
         session.add(new_account)
         try:
             session.commit()
             session.refresh(new_account)
         except IntegrityError as e:
             session.rollback()
-            logging.error("Integrity Error: %s", e)
+            logging.error("Database Error: %s\n%s", str(e), traceback.format_exc())
             return jsonify({"error": "Integrity Error"}), 400
 
     return jsonify({"message": "Account created"}), 200
