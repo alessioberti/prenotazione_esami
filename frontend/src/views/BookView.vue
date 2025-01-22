@@ -1,7 +1,7 @@
 <template>
     <div class="slots-page">
       <h2>Disponibilità Esame</h2>
-  
+                
       <!-- Sezione filtri -->
       <div class="filters">
         <!-- Filtro Operatore -->
@@ -121,9 +121,9 @@
     const selectedOperator = ref('')
     const labs = ref([])
     const selectedLaboratory = ref('')
-    const fromDate = ref(route.query.date_from || '2025-01-22')
-    const toDate = ref('2025-02-21')
-    
+    const toDate = ref('')
+    const fromDate = ref(route.query.date_from || ref(''))
+
     // Array di slot e paginazione
     const slots = ref([])
     const currentPage = ref(1)
@@ -133,17 +133,11 @@
     const showConfirmModal = ref(false)
     const selectedSlot = ref(null)
     const errorMessage = ref('') // per visualizzare eventuali errori
-    
-    
-  
-
 
     // onMounted: carica i filtri base e gli slot
     onMounted(async () => {
       if (!examTypeId.value) {
         console.error('Nessun exam_type_id specificato!')
-        // In caso volessi bloccare la pagina o reindirizzare altrove:
-        // router.push({ name: 'someRoute' })
         return
       }
       await fetchFilters()
@@ -174,19 +168,21 @@
     // Carica gli slot dal backend
     async function fetchSlots() {
       try {
-        const response = await api.get('/slots_availability', {
-          params: {
-            exam_type_id: examTypeId.value,
-            operator_id: selectedOperator.value || null,
-            laboratory_id: selectedLaboratory.value || null,
-            datetime_from_filter: fromDate.value,
-            datetime_to_filter: toDate.value
-          }
-        })
+        const params = {
+          exam_type_id: examTypeId.value,
+        }
+      
+        if (selectedOperator.value) params.operator_id = selectedOperator.value
+        if (selectedLaboratory.value) params.laboratory_id = selectedLaboratory.value
+        if (fromDate.value) params.datetime_from_filter = fromDate.value
+        if (toDate.value) params.datetime_to_filter = toDate.value
+      
+        const response = await api.get('/slots_availability', { params })
         slots.value = response.data
       } catch (err) {
         console.error('Errore caricamento slots:', err)
         slots.value = []
+        errorMessage.value = 'Errore durante il caricamento degli slot'
       }
     }
 

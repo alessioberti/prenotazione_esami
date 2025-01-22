@@ -36,7 +36,7 @@
   // Stato
   const examTypes = ref([])
   const selectedExam = ref('')
-  const startDate = ref('2025-01-22') // valore di default
+  const startDate = ref(new Date().toISOString().split('T')[0]);
   
   onMounted(fetchExamTypes)
   

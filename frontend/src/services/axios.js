@@ -2,20 +2,22 @@
 import axios from "axios";
 
 const instance = axios.create({
-  baseURL: "http://localhost:10000", // Cambia se usi un'altra porta o dominio
+  baseURL: "http://localhost:10000",
   timeout: 10000,
   headers: { "Content-Type": "application/json" },
 });
 
-instance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+api.interceptors.request.use((config) => {
+  const csrfToken = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("csrf_access_token="))
+    ?.split("=")[1];
+
+  if (csrfToken) {
+    config.headers["X-CSRF-TOKEN"] = csrfToken;
+  }
+  config.withCredentials = true;
+  return config;
+});
 
 export default instance;

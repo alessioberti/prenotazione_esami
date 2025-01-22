@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, make_response
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required, JWTManager, set_access_cookies
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -20,17 +21,49 @@ from operators_availability import generate_availabile_slots
 
 JWT_COOKIE_SECURE = True
 JWT_COOKIE_SAMESITE = "None"
+JWT_SECRET_KEY = "supersegreto123"
+CSFR_SECRET_KEY = "supersegreto123"
 FRONTEND_URL = "https://localhost:5173"
 
 app = Flask(__name__)
-app.config["JWT_SECRET_KEY"] = "supersegreto123"
+app.config["JWT_SECRET_KEY"] = JWT_SECRET_KEY
+
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config['JWT_TOKEN_LOCATION'] = ['cookies']
 app.config['JWT_COOKIE_SECURE'] = JWT_COOKIE_SECURE
 app.config['JWT_COOKIE_SAMESITE'] = JWT_COOKIE_SAMESITE
-app.config['JWT_COOKIE_CSRF_PROTECT'] = True
-
 jwt = JWTManager(app)
+
+"""
+app.config["SECRET_KEY"] = CSFR_SECRET_KEY
+#app.config["WTF_CSRF_ALLOWED_ORIGINS"] = [FRONTEND_URL]
+app.config["WTF_CSRF_CHECK_REFERRER"] = False
+app.config['JWT_COOKIE_CSRF_PROTECT'] = True
+csrf = CSRFProtect(app)
+
+@app.before_request
+def debug_request():
+    csrf_header = request.headers.get("X-CSRF-TOKEN")
+    csrf_cookie = request.cookies.get("csrf_access_token")
+    #logging.info(f"CSRF Token from Header: {csrf_header}")
+    #logging.info(f"CSRF Token from Cookie: {csrf_cookie}")
+    if csrf_header != csrf_cookie:
+        logging.error("CSRF Token mismatch!")
+
+@app.after_request
+def set_csrf_cookie(response):
+    csrf_token = generate_csrf()
+    response.set_cookie(
+        'csrf_access_token',
+        csrf_token,
+        httponly=False,
+        secure=JWT_COOKIE_SECURE,
+        samesite=JWT_COOKIE_SAMESITE,
+    )
+    return response
+
+"""
+
 logging.basicConfig(level=logging.INFO)
 CORS(
   app,
@@ -80,6 +113,7 @@ def register():
     return jsonify({"message": "Account created"}), 200
 
 @app.post("/login")
+#@csrf.exempt
 def login():
     account_data = request.json
     if not account_data:

@@ -1,10 +1,8 @@
 <template>
-    <div class="dashboard-container">
-      <h2>Benvenuto nella Dashboard</h2>
-  
+    <div class="home-container">
+      <h2>Sistema di prenotazione</h2>
       <button @click="goToBook">Prenota un Esame</button>
       <button @click="goToManage">Gestisci Prenotazioni</button>
-      <button @click="handleLogout">Logout</button>
     </div>
   </template>
   
@@ -23,16 +21,10 @@
     router.push({ name: 'manage' })
   }
   
-  const handleLogout = () => {
-    // Chiamata eventuale a /logout sul backend
-    // await api.post('/logout') ...
-    logout() // rimuove token da localStorage
-    router.push({ name: 'login' })
-  }
   </script>
   
   <style scoped>
-  .dashboard-container {
+  .home-container {
     text-align: center;
     margin-top: 50px;
   }
