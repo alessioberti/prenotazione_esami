@@ -1,6 +1,6 @@
 <template>
   <div class="slots-page">
-    <h2>Disponibilità Esame</h2>
+    <h2 class="title-page">Disponibilità Esame</h2>
 
     <!-- Sezione filtri -->
     <div class="filters">
@@ -36,21 +36,28 @@
     <div v-if="paginatedSlots.length === 0">
       <p>Nessuno slot trovato.</p>
     </div>
-    <div v-else>
-      <div v-for="slot in paginatedSlots" :key="slot.operator_availability_slot_start" class="slot-item">
-        <div>
-          <strong>{{ slot.operator_availability_date }}</strong>
-          ({{ slot.operator_name }} - {{ slot.laboratory_name }})
+    <ul v-else>
+      <li v-for="slot in paginatedSlots" :key="slot.operator_availability_slot_start" class="item-list">
+        <div @click="openConfirmModal(slot)" class="flex justify-between w-full">
+          <div class="flex min-w-0 gap-x-4">
+            <div class="min-w-0 flex-auto text-left">
+              <p class="text-sm/6 font-semibold text-gray-900">
+                <strong class="mr-4">{{ slot.operator_availability_date }}</strong>
+
+                {{ slot.operator_availability_slot_start }}
+                →
+                {{ slot.operator_availability_slot_end }}
+              </p>
+              <p class="mt-1 truncate text-xs/5 text-gray-500">{{ slot.operator_name }}</p>
+              <!--  <span > - {{ slot.laboratory_name }}</span>   -->
+            </div>
+          </div>
+          <div class="hidden shrink-0 sm:flex sm:flex-col sm:items-end text-sm/6 font-semibold text-gray-900">
+            {{ slot.laboratory_name }}
+          </div>
         </div>
-        <div>
-          Orario:
-          {{ slot.operator_availability_slot_start }}
-          →
-          {{ slot.operator_availability_slot_end }}
-        </div>
-        <button @click="openConfirmModal(slot)">Prenota</button>
-      </div>
-    </div>
+      </li>
+    </ul>
 
     <!-- Paginazione -->
     <div class="pagination" v-if="totalPages > 1">
@@ -78,7 +85,7 @@
         </p>
         <button @click="confirmBooking">Conferma</button>
         <button @click="cancelBooking">Annulla</button>
-        <p v-if="errorMessage" style="color: red;">{{ errorMessage }}</p>
+        <p v-if="errorMessage" style="color: red">{{ errorMessage }}</p>
       </div>
     </div>
   </div>

@@ -13,6 +13,7 @@ from flask_cors import CORS
 from database import engine, OperatorsAvailability, Operator, Laboratory, SlotBooking, LaboratoryClosure, OperatorAbsence, ExamType, Account
 from operators_availability import generate_availabile_slots
 from dotenv import load_dotenv
+from flask import blueprints
 
 #https://flask.palletsprojects.com/en/stable/quickstart/
 #https://flask-login.readthedocs.io/en/latest/

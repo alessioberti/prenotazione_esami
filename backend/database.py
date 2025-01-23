@@ -183,7 +183,9 @@ def populate_demo_data():
             # === 1. Creazione Account ===
             account_uuids = {
                 "marco_rossi": uuid.uuid4(),
-                "giulia_verdi": uuid.uuid4()
+                "giulia_verdi": uuid.uuid4(),
+                "luca_bianchi": uuid.uuid4(),
+                "sara_neri": uuid.uuid4()
             }
             accounts = [
                 Account(
@@ -212,13 +214,41 @@ def populate_demo_data():
                     is_operator=False,
                     is_admin=True,
                 ),
+                Account(
+                    account_id=account_uuids["luca_bianchi"],
+                    username="lbianchi",
+                    password_hash="hashed_password3",
+                    email="luca.bianchi@example.com",
+                    first_name="Luca",
+                    last_name="Bianchi",
+                    tel_number="+393479876543",
+                    enabled=True,
+                    failed_login_count=0,
+                    is_operator=True,
+                    is_admin=False,
+                ),
+                Account(
+                    account_id=account_uuids["sara_neri"],
+                    username="sneri",
+                    password_hash="hashed_password4",
+                    email="sara.neri@example.com",
+                    first_name="Sara",
+                    last_name="Neri",
+                    tel_number="+393461234987",
+                    enabled=True,
+                    failed_login_count=0,
+                    is_operator=True,
+                    is_admin=False,
+                ),
             ]
             session.add_all(accounts)
 
             # === 2. Creazione Laboratori ===
             laboratory_uuids = {
                 "milano": uuid.uuid4(),
-                "torino": uuid.uuid4()
+                "torino": uuid.uuid4(),
+                "roma": uuid.uuid4(),
+                "napoli": uuid.uuid4()
             }
             laboratories = [
                 Laboratory(
@@ -233,13 +263,27 @@ def populate_demo_data():
                     address="Corso Francia 25, Torino",
                     contact_info="info.torino@laboratori.it",
                 ),
+                Laboratory(
+                    laboratory_id=laboratory_uuids["roma"],
+                    name="Clinica Roma",
+                    address="Via Nazionale 15, Roma",
+                    contact_info="info.roma@laboratori.it",
+                ),
+                Laboratory(
+                    laboratory_id=laboratory_uuids["napoli"],
+                    name="Laboratorio Napoli",
+                    address="Piazza Garibaldi 20, Napoli",
+                    contact_info="info.napoli@laboratori.it",
+                ),
             ]
             session.add_all(laboratories)
 
             # === 3. Creazione Tipi di Esame ===
             exam_type_uuids = {
                 "esame_sangue": uuid.uuid4(),
-                "tampone": uuid.uuid4()
+                "tampone": uuid.uuid4(),
+                "ecg": uuid.uuid4(),
+                "radiografia": uuid.uuid4()
             }
             exam_types = [
                 ExamType(
@@ -252,13 +296,25 @@ def populate_demo_data():
                     name="Tampone Molecolare",
                     description="Test molecolare per COVID-19",
                 ),
+                ExamType(
+                    exam_type_id=exam_type_uuids["ecg"],
+                    name="ECG",
+                    description="Elettrocardiogramma",
+                ),
+                ExamType(
+                    exam_type_id=exam_type_uuids["radiografia"],
+                    name="Radiografia",
+                    description="Radiografia standard",
+                ),
             ]
             session.add_all(exam_types)
 
             # === 4. Creazione Operatori ===
             operator_uuids = {
                 "francesca_conti": uuid.uuid4(),
-                "alessandro_ricci": uuid.uuid4()
+                "alessandro_ricci": uuid.uuid4(),
+                "luca_bianchi": uuid.uuid4(),
+                "sara_neri": uuid.uuid4()
             }
             operators = [
                 Operator(
@@ -271,13 +327,26 @@ def populate_demo_data():
                     name="Alessandro Ricci",
                     account_id=account_uuids["giulia_verdi"],
                 ),
+                Operator(
+                    operator_id=operator_uuids["luca_bianchi"],
+                    name="Luca Bianchi",
+                    account_id=account_uuids["luca_bianchi"],
+                ),
+                Operator(
+                    operator_id=operator_uuids["sara_neri"],
+                    name="Sara Neri",
+                    account_id=account_uuids["sara_neri"],
+                ),
             ]
             session.add_all(operators)
 
             # === 5. Creazione Disponibilità ===
             availability_uuids = {
                 "francesca_lunedi": uuid.uuid4(),
-                "alessandro_mercoledi": uuid.uuid4()
+                "alessandro_mercoledi": uuid.uuid4(),
+                "luca_venerdi": uuid.uuid4(),
+                "sara_martedi": uuid.uuid4(),
+                "francesca_giovedi": uuid.uuid4()
             }
             availabilities = [
                 OperatorsAvailability(
@@ -308,6 +377,48 @@ def populate_demo_data():
                     pause_minutes=5,
                     enabled=True,
                 ),
+                OperatorsAvailability(
+                    availability_id=availability_uuids["luca_venerdi"],
+                    operator_id=operator_uuids["luca_bianchi"],
+                    laboratory_id=laboratory_uuids["roma"],
+                    exam_type_id=exam_type_uuids["ecg"],
+                    available_from_date=date(2025, 1, 22),
+                    available_to_date=date(2025, 1, 31),
+                    available_from_time=time(9, 0),
+                    available_to_time=time(13, 0),
+                    available_weekday=5,
+                    slot_duration_minutes=15,
+                    pause_minutes=5,
+                    enabled=True,
+                ),
+                OperatorsAvailability(
+                    availability_id=availability_uuids["sara_martedi"],
+                    operator_id=operator_uuids["sara_neri"],
+                    laboratory_id=laboratory_uuids["napoli"],
+                    exam_type_id=exam_type_uuids["radiografia"],
+                    available_from_date=date(2025, 1, 22),
+                    available_to_date=date(2025, 1, 31),
+                    available_from_time=time(10, 0),
+                    available_to_time=time(14, 0),
+                    available_weekday=2,
+                    slot_duration_minutes=25,
+                    pause_minutes=10,
+                    enabled=True,
+                ),
+                OperatorsAvailability(
+                    availability_id=availability_uuids["francesca_giovedi"],
+                    operator_id=operator_uuids["francesca_conti"],
+                    laboratory_id=laboratory_uuids["milano"],
+                    exam_type_id=exam_type_uuids["radiografia"],
+                    available_from_date=date(2025, 1, 22),
+                    available_to_date=date(2025, 1, 31),
+                    available_from_time=time(14, 0),
+                    available_to_time=time(18, 0),
+                    available_weekday=4,
+                    slot_duration_minutes=20,
+                    pause_minutes=5,
+                    enabled=True,
+                ),
             ]
             session.add_all(availabilities)
 
@@ -317,6 +428,7 @@ def populate_demo_data():
 
     except Exception as e:
         print(f"Errore durante l'inserimento dei dati: {e}")
+
 
 clear_existing_data()
 populate_demo_data()

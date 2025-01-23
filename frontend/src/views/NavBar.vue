@@ -5,7 +5,10 @@
       <template v-if="isLoggedIn">
         <li><router-link to="/">Home</router-link></li>
         <li><router-link to="/manage">Prenotazioni</router-link></li>
-        <li> {{ userInfo?.username }} <button @click="handleLogout" class="logout-btn">Logout</button></li>
+        <li>
+          <router-link to="/account" class="username">{{ userInfo?.username }}</router-link>
+          <button @click="handleLogout" class="logout-btn">Logout</button>
+        </li>
       </template>
       <template v-else>
         <li><router-link to="/">Home</router-link></li>
@@ -61,6 +64,14 @@ const handleLogout = async () => {
   font-weight: bold;
   font-size: 1.5rem;
 }
+
+.username {
+  color: white;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.username:hover {
+  text-decoration: none;
+}
 </style>
-
-

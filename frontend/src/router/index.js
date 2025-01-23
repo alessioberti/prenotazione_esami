@@ -7,6 +7,7 @@ import Home from '../views/HomeView.vue'
 import ExamSelection from '../views/ExamSelection.vue'
 import BookView from '../views/BookView.vue'
 import ManageView from '../views/ManageView.vue'
+import AccountView from '../views/AccountView.vue'
 import { useAuth } from '../composables/useAuth'
 
 const routes = [
@@ -50,7 +51,14 @@ const routes = [
       {
         path: '/reset-password',
         name: 'reset-password',
-        component: ResetPassword
+        component: ResetPassword,
+        meta: { requiresAuth: true }
+      },
+      {
+        path: '/account',
+        name: 'account',
+        component: AccountView,
+        meta: { requiresAuth: true }
       }
     ]
   }

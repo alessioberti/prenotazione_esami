@@ -1,38 +1,53 @@
 <template>
-  <div class="login-container">
-    <h2>Login</h2>
-
-    <form @submit.prevent="handleLogin">
+  <div class="flex min-h-full flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+    <div class="w-full max-w-sm space-y-10">
       <div>
-        <label for="username">Username</label>
-        <input
-          id="username"
-          type="text"
-          v-model="username"
-          required
-          placeholder="Inserisci il tuo username"
-        />
+        <img class="mx-auto h-10 w-auto" src="https://tailwindui.com/plus/img/logos/mark.svg?color=indigo&shade=600" alt="Your Company" />
+        <h2 class="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900">Sign in to your account</h2>
       </div>
-      <div>
-        <label for="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          v-model="password"
-          required
-          placeholder="Inserisci la tua password"
-        />
-      </div>
-      <button type="submit" :disabled="loading">Accedi</button>
-    </form>
+      <form class="space-y-6" @submit.prevent="handleLogin">
+        <div>
+          <div class="col-span-2">
+            <input
+                id="username"
+                type="text"
+                class="button-login"
+                v-model="username"
+                required
+                placeholder="Inserisci il tuo username"
+              />
+          </div>
+          <div class="-mt-px">
+            <input
+                id="password"
+                type="password"
+                class="button-login"
+                v-model="password"
+                required
+                placeholder="Inserisci la tua password"
+              /></div>
+        </div>
 
-    <!-- Messaggio di errore -->
-    <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-    <!-- Collegamenti per registrazione e reset password -->
-    <div class="links">
-      <p>Non hai un account? <router-link to="/register">Registrati</router-link></p>
-      <p>Hai dimenticato la password? <router-link to="/reset-password">Recupera Password</router-link></p>
+       
+
+      
+
+        <div>
+          <button type="submit" class="button-submit-login"  :disabled="loading">Sign in</button>
+        </div>
+      </form>
+
+      <div class="flex items-center justify-between">
+          <div  class="font-semibold text-indigo-600 hover:text-indigo-500"> <router-link to="/register">Registrati</router-link></div>
+          <div class="font-semibold text-indigo-600 hover:text-indigo-500"><router-link to="/reset-password">Recupera Password</router-link></div>
+        </div>
+
+       <!-- Messaggio di errore -->
+        <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+
+
+
     </div>
   </div>
 </template>
@@ -116,3 +131,8 @@ button:disabled {
   font-size: 0.9em;
 }
 </style>
+
+
+
+
+
