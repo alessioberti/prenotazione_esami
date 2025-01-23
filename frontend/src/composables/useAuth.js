@@ -33,10 +33,23 @@ export function useAuth() {
     userInfo.value = null
   }
 
+  const checkAuth = async () => {
+    try {
+      const resp = await api.get('/mylogin')
+      userInfo.value = resp.data
+      isLoggedIn.value = true
+    } catch (err) {
+      console.error('Errore durante il checkAuth:', err)
+      isLoggedIn.value = false
+      userInfo.value = null
+    }
+  }
+
   return {
     isLoggedIn,
     userInfo,
     login,
     logout,
+    checkAuth
   }
 }

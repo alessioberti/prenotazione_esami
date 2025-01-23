@@ -3,6 +3,17 @@
 </template>
 
 <script setup>
+
+import { useAuth } from './composables/useAuth'
+import { onMounted } from 'vue'
+
+const { checkAuth, authLoading } = useAuth()
+
+onMounted(async () => {
+  await checkAuth() // Esegui il controllo autenticazione al caricamento dell'app
+})
+
+
 </script>
 
 <style>

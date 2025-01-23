@@ -12,7 +12,7 @@ import { useAuth } from '../composables/useAuth'
 const routes = [
   {
     path: '/',
-    component: MainLayout,
+    component: MainLayout, 
     children: [
       {
         path: '',
@@ -61,24 +61,12 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach(async (to, from, next) => {
-  const { isLoggedIn, checkAuth } = useAuth()
 
+router.beforeEach((to, from, next) => {
+  const { isLoggedIn } = useAuth()
 
-  if (to.meta.requiresAuth) {
-    try {
-      
-      await checkAuth()
-
-      if (isLoggedIn.value) {
-        next()
-      } else {
-        next({ name: 'login' })
-      }
-    } catch (err) {
-      console.error('Errore nel controllo autenticazione:', err)
-      next({ name: 'login' })
-    }
+  if (to.meta.requiresAuth && !isLoggedIn.value) {
+    next({ name: 'login' })
   } else {
     next()
   }
