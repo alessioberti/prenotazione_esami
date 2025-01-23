@@ -74,7 +74,16 @@ CORS(
   resources={r"/*": {"origins": FRONTEND_URL}},
   supports_credentials=True
 )
+
+# Block list per i token JWT invalidi (/logout)
 BLOCKLIST = set()
+@jwt.token_in_blocklist_loader
+def check_if_token_in_blocklist(jwt_header, jwt_payload):
+    jti = jwt_payload["jti"]
+    is_blocked = jti in BLOCKLIST
+    logging.info(f"Verifica blocklist per JTI {jti}: {'Bloccato' if is_blocked else 'Non bloccato'}")
+    return is_blocked
+
 
 @app.post("/register")
 def register():
@@ -193,9 +202,14 @@ def mylogin():
 @app.post("/logout")
 @jwt_required()
 def logout():
-    jti = get_jwt()["jti"]
-    BLOCKLIST.add(jti)
-    return jsonify({"Success": "Logged out"}), 200
+    try:
+        jti = get_jwt()["jti"]
+        BLOCKLIST.add(jti)
+        logging.info(f"Token {jti} aggiunto alla blocklist con successo")
+        return jsonify({"Success": "Logged out"}), 200
+    except Exception as e:
+        logging.error(f"Errore durante il logout: {e}")
+        return jsonify({"error": "Errore durante il logout"}), 500
 
 @app.get('/slots_availability')
 @jwt_required()
