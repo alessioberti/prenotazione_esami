@@ -82,7 +82,10 @@
 
 <script setup>
 import { ref } from 'vue'
-import api from '../composables/useApi' // Import axios instance
+import { useRouter } from 'vue-router'
+import api from '../composables/useApi'
+
+const router = useRouter()
 
 // Variabili reattive per i campi del form
 const username = ref('')
@@ -115,7 +118,10 @@ const handleRegister = async () => {
 
     // Messaggio di successo
     message.value = response.data.message || 'Registrazione completata!'
-    clearForm() // Resetta il form
+    
+    // passa alla pagina di login
+    router.push('/login')
+
   } catch (err) {
     // Messaggio di errore
     error.value = err?.response?.data?.error || 'Errore di registrazione'

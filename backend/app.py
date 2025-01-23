@@ -68,8 +68,6 @@ def set_csrf_cookie(response):
 
 """
 
-
-
 logging.basicConfig(level=logging.INFO)
 CORS(
   app,
@@ -220,9 +218,19 @@ def get_slots_availability():
                 datetime.fromisoformat(request.args.get('datetime_to_filter')),last_reservation_datetime)
         else:
             datetime_to_filter = last_reservation_datetime 
+
+    # se i filtri opzionali vengono passati in un formato non valido, restituisci un errore    
+
         exam_type_id = request.args.get('exam_type_id', type=int)
+        if exam_type_id:
+            exam_type_id = UUID(exam_type_id)
         operator_id = request.args.get('operator_id', type=int)
+        if operator_id:
+            operator_id = UUID(operator_id)
         laboratory_id = request.args.get('laboratory_id', type=int)
+        if laboratory_id:
+            laboratory_id = UUID(laboratory_id)
+
     except (ValueError):
         return jsonify({"error": "Missing key or invalid value format"}), 400
 
@@ -318,8 +326,17 @@ def get_slots_availability():
 @jwt_required()
 def get_operators():
 
-    exam_id = request.args.get("exam_id")
-    laboratory_id = request.args.get("laboratory_id")
+    try:
+        exam_id = request.args.get("exam_id")
+        laboratory_id = request.args.get("laboratory_id")
+
+        if exam_id:
+            exam_id = UUID(exam_id)
+        if laboratory_id:
+            laboratory_id = UUID(laboratory_id)
+
+    except (ValueError):
+        return jsonify({"error": "Invalid UUID Format"}), 400
 
     with Session(engine) as session:
         
@@ -335,7 +352,7 @@ def get_operators():
         operators_list = []
         for operator in operators:
             operators_list.append({
-                "operator_id": operator.operator_id,
+                "operator_id": str(operator.operator_id),
                 "name": operator.name
             })
 
@@ -345,19 +362,17 @@ def get_operators():
 @jwt_required()
 def get_exam_types():
 
-    current_user = UUID(get_jwt_identity())  # Ottieni l'utente corrente dal token
-    logging.error(f"Richiesta ricevuta da utente: {current_user}")
     with Session(engine) as session:
 
         exam_types_query = select(ExamType)
         exam_types = session.execute(exam_types_query).scalars().all()
 
         exam_types_list = []
-        for et in exam_types:
+        for exam_type in exam_types:
             exam_types_list.append({
-                "exam_type_id": et.exam_type_id,
-                "name": et.name,
-                "description": et.description
+                "exam_type_id": str(exam_type.exam_type_id),
+                "name": exam_type.name,
+                "description": exam_type.description
             })
 
     return jsonify(exam_types_list), 200
@@ -365,9 +380,18 @@ def get_exam_types():
 @app.get("/laboratories")
 @jwt_required()
 def get_laboratories():
+    
+    try:
+        exam_id = request.args.get("exam_id")
+        operator_id = request.args.get("operator_id")
 
-    exam_id = request.args.get("exam_id")
-    operator_id = request.args.get("operator_id")
+        if exam_id:
+            exam_id = UUID(exam_id)
+        if operator_id:
+            operator_id = UUID(operator_id)
+    except (ValueError):
+        return jsonify({"error": "Invalid UUID Format"}), 400
+    
 
     with Session(engine) as session:
         
@@ -376,17 +400,17 @@ def get_laboratories():
         if exam_id:
             laboratories_query = laboratories_query.where(OperatorsAvailability.exam_type_id == exam_id)
         if operator_id:
-            laboratories_query = laboratories_query.where(OperatorsAvailability.operator_id == operator_id)  
+            laboratories_query = laboratories_query.where(OperatorsAvailability.operator_id == operator_id)
 
         laboratories = session.execute(laboratories_query).scalars().all()
 
         labs_list = []
-        for lab in laboratories:
+        for laboratory in laboratories:
             labs_list.append({
-                "laboratory_id": lab.laboratory_id,
-                "name": lab.name,
-                "address": lab.address,
-                "contact_info": lab.contact_info
+                "laboratory_id": str(laboratory.laboratory_id),
+                "name": laboratory.name,
+                "address": laboratory.address,
+                "contact_info": laboratory.contact_info
             })
 
     return jsonify(labs_list), 200
@@ -406,9 +430,8 @@ def book_slot():
         appointment_time_start = time.fromisoformat(slot["operator_availability_slot_start"])
         appointment_time_end  =time.fromisoformat(slot["operator_availability_slot_end"])
         appointment_date = date.fromisoformat(slot["operator_availability_date"])
-        availability_id = slot.get("availability_id")
-        rejected=slot.get("rejected", False)
-        exam_type_id = slot.get("exam_type_id")
+        availability_id = UUID(slot.get("availability_id"))
+        exam_type_id = UUID(slot.get("exam_type_id"))
 
     except (KeyError, ValueError):
         return jsonify({"error": "Missing key or invalid value format"}), 400
@@ -435,7 +458,7 @@ def book_slot():
             appointment_time_start = appointment_time_start,
             appointment_time_end = appointment_time_end,
             appointment_date = appointment_date,
-            rejected=rejected
+            rejected=False
         )
 
         try:
@@ -469,9 +492,9 @@ def get_booked_slots():
             slots_list.append({
                 "appointment_id": slot.appointment_id,
                 "availability_id": slot.availability_id,
-                "exam_type_id": slot.operators_availability.exam_type_id,
-                "laboratory_id": slot.operators_availability.laboratory_id,
-                "operator_id": slot.operators_availability.operator_id,
+                "exam_type_id": str(slot.operators_availability.exam_type_id),
+                "laboratory_id": str(slot.operators_availability.laboratory_id),
+                "operator_id": str(slot.operators_availability.operator_id),
                 "operator_name": slot.operators_availability.operator.name,
                 "exam_type_name": slot.operators_availability.exam_type.name,
                 "laboratory_name": slot.operators_availability.laboratory.name,
@@ -483,33 +506,17 @@ def get_booked_slots():
 
     return jsonify(slots_list), 200
 
-@app.delete("/book_slot/<int:appointment_id>")
-@jwt_required()
-def delete_booked_slot(appointment_id):
-
-    current_user = UUID(get_jwt_identity())
-    
-    with Session(engine) as session:
-        slot_query = select(SlotBooking).where(SlotBooking.appointment_id == appointment_id)
-        slot = session.execute(slot_query).scalars().first()
-
-        if not slot:
-            return jsonify({"error": "Slot not found"}), 404
-        
-        if slot.account_id != current_user:
-            return jsonify({"error": "Unauthorized"}), 401
-
-        session.delete(slot)
-        session.commit()
-
-        return jsonify({"Success": "Slot deleted"}), 200
-    
-@app.put("/book_slot/<int:appointment_id>/reject")
+@app.put("/book_slot/<string:appointment_id>/reject")
 @jwt_required()
 def reject_booked_slot(appointment_id):
 
     current_user = UUID(get_jwt_identity())
-    
+
+    try:
+        appointment_id = UUID(appointment_id)
+    except (ValueError):
+        return jsonify({"error": "Invalid UUID Format"}), 400
+
     with Session(engine) as session:
         slot_query = select(SlotBooking).where(SlotBooking.appointment_id == appointment_id)
         slot = session.execute(slot_query).scalars().first()
@@ -521,7 +528,12 @@ def reject_booked_slot(appointment_id):
             logging.error(f"Current user: {current_user}, Slot account_id: {slot.account_id}")
             return jsonify({"error": "Unauthorized"}), 401
 
-        slot.rejected = True
-        session.commit()
+        try:
+            slot.rejected = True
+            session.commit()
+        except IntegrityError as e:
+            session.rollback()
+            logging.error("Database Error: %s\n%s", str(e), traceback.format_exc())
+            return jsonify({"error": "Integrity Error"}), 400
 
         return jsonify({"Success": "Slot Rejected"}), 200

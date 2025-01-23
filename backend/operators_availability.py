@@ -80,9 +80,9 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
                 # crea lo slot come oggetto dictonary
                 slot = {
                     "operator_availability_id": operator_availability.availability_id,
-                    "exam_type_id": operator_availability.exam_type_id,
-                    "laboratory_id": operator_availability.laboratory_id,
-                    "operator_id": operator_availability.operator_id,
+                    "exam_type_id": str(operator_availability.exam_type_id),
+                    "laboratory_id": str(operator_availability.laboratory_id),
+                    "operator_id": str(operator_availability.operator_id),
                     "exam_type_name": operator_availability.exam_type.name,
                     "laboratory_name": operator_availability.laboratory.name,
                     "operator_name": operator_availability.operator.name,
