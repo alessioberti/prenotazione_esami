@@ -9,12 +9,12 @@
         <div>
           <div class="col-span-2">
             <input
-                id="username"
+                id="email"
                 type="text"
                 class="button-login"
-                v-model="username"
+                v-model="email"
                 required
-                placeholder="Inserisci il tuo username"
+                placeholder="Inserisci la tua email"
               />
           </div>
           <div class="-mt-px">
@@ -57,7 +57,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
-const username = ref('')
+const email = ref('')
 const password = ref('')
 const errorMessage = ref(null)
 const loading = ref(false)
@@ -71,7 +71,7 @@ const handleLogin = async () => {
     loading.value = true
 
     // Usa il composable per autenticarti
-    await login(username.value, password.value)
+    await login(email.value, password.value)
 
     router.push({ name: 'home' })
   } catch (err) {

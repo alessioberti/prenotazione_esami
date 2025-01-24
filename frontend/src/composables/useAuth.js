@@ -5,10 +5,10 @@ const isLoggedIn = ref(false)
 const userInfo = ref(null)
 
 export function useAuth() {
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     try {
   
-      await api.post('/login', { username, password })
+      await api.post('/login', { email, password })
       const resp = await api.get('/mylogin')
       userInfo.value = resp.data
       isLoggedIn.value = true

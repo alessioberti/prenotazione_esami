@@ -13,7 +13,6 @@ from flask_cors import CORS
 from database import engine, OperatorsAvailability, Operator, Laboratory, SlotBooking, LaboratoryClosure, OperatorAbsence, ExamType, Account
 from generate_availabile_slots import generate_availabile_slots
 from dotenv import load_dotenv
-from flask import blueprints
 
 #https://flask.palletsprojects.com/en/stable/quickstart/
 #https://flask-login.readthedocs.io/en/latest/
@@ -28,6 +27,8 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 CSFR_SECRET_KEY = os.getenv("CSFR_SECRET_KEY")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 BACKEND_URL = os.getenv("BACKEND_URL")
+MAX_BOOKINGS_PER_USER = int(os.getenv("MAX_BOOKINGS_PER_USER", 5))
+MAX_DAYS_BOOK_FORWARD = int(os.getenv("MAX_DAYS_BOOK_FORWARD", 60))
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = JWT_SECRET_KEY
@@ -85,7 +86,6 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
     logging.info(f"Verifica blocklist per JTI {jti}: {'Bloccato' if is_blocked else 'Non bloccato'}")
     return is_blocked
 
-
 @app.post("/register")
 def register():
  
@@ -93,8 +93,6 @@ def register():
     if not new_account:
         return jsonify({"Request invalid":"missing JSON body"}), 400
 
-    #Caratteri e numeri da 6 a 30 caratteri
-    username_regex = r'^[0-9A-Za-z]{6,30}$'
     #Almeno una lettera maiuscola, una minuscola, un numero e un simbolo lunghezza da 8 a 32 caratteri
     password_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,32}$'
     #Email valida
@@ -102,8 +100,6 @@ def register():
     #Numero di telefono internazionale
     tel_number_regex = r'^\+?\d{10,13}$'
 
-    if not re.match(username_regex, new_account.get("username", "")):
-        return jsonify({"error": "Invalid username"}), 400
     if not re.match(password_regex, new_account.get("password", "")):
         return jsonify({"error": "Invalid password"}), 400
     if not re.match(email_regex, new_account.get("email", "")):
@@ -112,7 +108,6 @@ def register():
         return jsonify({"error": "Invalid tel_number"}), 400
     
     new_account = Account(
-        username=new_account.get("username"),
         password_hash = generate_password_hash(new_account.get("password")),
         email=new_account.get("email"),
         tel_number=new_account.get("tel_number"),
@@ -122,10 +117,6 @@ def register():
 
     with Session(engine) as session:
         
-        # verifica eventuali username o email già presenti nel database
-        username_query = select(Account).where(Account.username == new_account.username)
-        if session.execute(username_query).scalars().first():
-            return jsonify({"error": "Username already in use"}), 409
         email_query = select(Account).where(Account.email == new_account.email)
         if session.execute(email_query).scalars().first():
             return jsonify({"error": "Email already in use"}), 409
@@ -142,42 +133,46 @@ def register():
     return jsonify({"message": "Account created"}), 200
 
 @app.post("/login")
-#@csrf.exempt
 def login():
     account_data = request.json
-    if not account_data:
-        return jsonify({"error":"missing JSON body"}), 400
+    
+    if not account_data or not account_data.get("email") or not account_data.get("password"):
+        return jsonify({"error": "Missing email or password"}), 400
     
     with Session(engine) as session:
-        account_query = select(Account).where(Account.username == account_data.get("username"))
+        
+        account_query = select(Account).where(Account.email == account_data["email"])
         account = session.execute(account_query).scalars().first()
-
         if not account:
-            return jsonify({"error": "Invalid username or password"}), 401
+            return jsonify({"error": "Invalid email or password"}), 401
+        
         
         if not account.enabled:
             return jsonify({"error": "Account disabled"}), 403
-
+        
+        # Controlla se ci sono troppi tentativi di accesso falliti
         if (account.failed_login_count >= 5) and ((datetime.now() - account.last_failed_login) < timedelta(minutes=5)):
             return jsonify({"error": "Too many login attempts"}), 401
-
-        if  check_password_hash(account.password_hash, account_data.get("password")):
-        
+       
+        if check_password_hash(account.password_hash, account_data["password"]):
+            
+            # Reset tentativi falliti e aggiorna il database
             account.failed_login_count = 0
             account.last_failed_login = None
             session.commit()
 
+            # Genera il token JWT
             access_token = create_access_token(identity=account.account_id)
             resp = make_response({"message": "Logged in"})
             set_access_cookies(resp, access_token)
             return resp
         
         else:
-            account.failed_login_count = account.failed_login_count + 1
+            # in caso di password errata incrementa i tentativi falliti
+            account.failed_login_count += 1
             account.last_failed_login = datetime.now()
             session.commit()
-
-            return jsonify({"error": "Invalid username or password"}), 401
+            return jsonify({"error": "Invalid email or password"}), 401
 
 @app.get("/mylogin")
 @jwt_required()
@@ -193,7 +188,6 @@ def mylogin():
             return jsonify({"error": "User not found"}), 404
 
         return jsonify({
-            "username": account.username,
             "email": account.email,
             "tel_number": account.tel_number,
             "first_name": account.first_name,
@@ -308,59 +302,104 @@ def get_laboratories():
 @app.post("/book_slot")
 @jwt_required()
 def book_slot():
-
     slot = request.json
     current_user = UUID(get_jwt_identity())
 
     if not slot:
         return jsonify({"error": "Missing JSON body"}), 400
-    
-    # verifica la presenza di tutti i campi obbligatori necessari per la prenotazione
+
+    # Verifica e parsing dei dati forniti
     try:
         appointment_time_start = time.fromisoformat(slot["operator_availability_slot_start"])
-        appointment_time_end  =time.fromisoformat(slot["operator_availability_slot_end"])
+        appointment_time_end = time.fromisoformat(slot["operator_availability_slot_end"])
         appointment_date = date.fromisoformat(slot["operator_availability_date"])
         availability_id = UUID(slot.get("availability_id"))
         exam_type_id = UUID(slot.get("exam_type_id"))
-
+        operator_id = UUID(slot.get("operator_id"))
+        laboratory_id = UUID(slot.get("laboratory_id"))
     except (KeyError, ValueError):
         return jsonify({"error": "Missing key or invalid value format"}), 400
 
+    # Transazione atomica per verifiche e inserimento di un nuovo slot
     with Session(engine) as session:
-
-        # non è possibile prenotare lo stesso esame due volte
-        booked_slots_query = (
-            select(SlotBooking)
-            .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
-            .where(SlotBooking.rejected == False)
-            .where(SlotBooking.account_id == current_user)
-            .where(OperatorsAvailability.exam_type_id == exam_type_id)
-        )
-        # vincolo applicativo un utente non può prenotare più volte lo stesso esame
-        # viene utilizzato un codice specifico per utilizzare un messaggio specifico in forntend
-        same_exam_booked = session.execute(booked_slots_query).scalars().all()
-        if same_exam_booked:
-            return jsonify({"error": "exam type already booked"}), 409 
-
-        new_booking = SlotBooking(
-            account_id=current_user,
-            availability_id=availability_id,
-            appointment_time_start = appointment_time_start,
-            appointment_time_end = appointment_time_end,
-            appointment_date = appointment_date,
-            rejected=False
-        )
-
         try:
+
+            # Verifica se l'utente ha già raggiunto il numero massimo di prenotazioni
+            user_bookings_query = (
+                select(SlotBooking)
+                .where(SlotBooking.account_id == current_user)
+                .where(SlotBooking.rejected == False)
+            )  
+            if len(session.execute(user_bookings_query).scalars().all()) >= MAX_BOOKINGS_PER_USER:
+                return jsonify({"error": "Max bookings reached"}), 403
+
+            # Verifica se l'utente ha già prenotato lo stesso tipo di esame
+            same_exam_booked_query = (
+                select(SlotBooking)
+                .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
+                .where(SlotBooking.rejected == False)
+                .where(SlotBooking.account_id == current_user)
+                .where(OperatorsAvailability.exam_type_id == exam_type_id)
+            )
+            if session.execute(same_exam_booked_query).scalars().first():
+                return jsonify({"error": "Exam type already booked"}), 403
+
+            # Verifica se il laboratorio è chiuso nella data e ora specificate
+            laboratory_closure_query = (
+                select(LaboratoryClosure)
+                .where(LaboratoryClosure.laboratory_id == laboratory_id)
+                .where(LaboratoryClosure.start_datetime <= datetime.combine(appointment_date, appointment_time_start))
+                .where(LaboratoryClosure.end_datetime > datetime.combine(appointment_date, appointment_time_start))
+            )
+            if session.execute(laboratory_closure_query).scalars().first():
+                return jsonify({"error": "Laboratory closed"}), 409
+
+            # Verifica se l'operatore è assente
+            operator_absence_query = (
+                select(OperatorAbsence)
+                .where(OperatorAbsence.operator_id == operator_id)
+                .where(OperatorAbsence.start_datetime <= datetime.combine(appointment_date, appointment_time_start))
+                .where(OperatorAbsence.end_datetime > datetime.combine(appointment_date, appointment_time_start))
+            )
+            if session.execute(operator_absence_query).scalars().first():
+                return jsonify({"error": "Operator absent"}), 409
+
+            # Verifica se lo slot è ancora disponibile
+            availability_query = (
+                select(OperatorsAvailability)
+                .where(OperatorsAvailability.availability_id == availability_id)
+            )
+            availability = session.execute(availability_query).scalars().first()
+            if not availability:
+                return jsonify({"error": "Slot not available"}), 404
+
+            # Creazione della prenotazione
+            new_booking = SlotBooking(
+                account_id=current_user,
+                availability_id=availability_id,
+                appointment_time_start=appointment_time_start,
+                appointment_time_end=appointment_time_end,
+                appointment_date=appointment_date,
+                rejected=False
+            )
             session.add(new_booking)
             session.commit()
+        
+        # errore di integrità nel database
         except IntegrityError as e:
+            
             session.rollback()
             logging.error("Database Error: %s\n%s", str(e), traceback.format_exc())
             return jsonify({"error": "Integrity Error"}), 400
         
-        return jsonify({"message": "Booking Complete"}), 200
-         
+        # errore generico del backend
+        except Exception as e:
+            session.rollback()
+            logging.error(f"Unexpected error: {e}")
+            return jsonify({"error": "Internal Server Error"}), 500
+
+    return jsonify({"message": "Booking Complete"}), 200
+
 @app.get("/slot_bookings")
 @jwt_required()
 def get_booked_slots():
@@ -427,3 +466,129 @@ def reject_booked_slot(appointment_id):
             return jsonify({"error": "Integrity Error"}), 400
 
         return jsonify({"Success": "Slot Rejected"}), 200
+
+@app.get('/slots_availability')
+@jwt_required()
+def get_slots_availability():
+
+    # Imposta i valori di default per i filtri dalla data di oggi a 60 giorni avanti
+    
+    first_reservation_datetime = datetime.combine((datetime.now() + timedelta(days=1)).date(), time(0, 0))
+    last_reservation_datetime = datetime.combine((datetime.now() + timedelta(days=MAX_DAYS_BOOK_FORWARD)).date(), time(0, 0))
+
+    # se i filtri sono presenti, sovrascrivi i valori di default se all'interno del range dei filtri di default
+    try:
+        if request.args.get('datetime_from_filter'):
+            datetime_from_filter = max(
+                datetime.fromisoformat(request.args.get('datetime_from_filter')), first_reservation_datetime)
+        else:
+            datetime_from_filter = first_reservation_datetime
+        if request.args.get('datetime_to_filter'):
+            datetime_to_filter = min(
+                datetime.fromisoformat(request.args.get('datetime_to_filter')),last_reservation_datetime)
+        else:
+            datetime_to_filter = last_reservation_datetime 
+
+    # se i filtri opzionali vengono passati in un formato non valido, restituisci un errore    
+
+        exam_type_id = request.args.get('exam_type_id', type=int)
+        if exam_type_id:
+            exam_type_id = UUID(exam_type_id)
+        operator_id = request.args.get('operator_id', type=int)
+        if operator_id:
+            operator_id = UUID(operator_id)
+        laboratory_id = request.args.get('laboratory_id', type=int)
+        if laboratory_id:
+            laboratory_id = UUID(laboratory_id)
+
+    except (ValueError):
+        return jsonify({"error": "Missing key or invalid value format"}), 400
+
+    logging.info("data inizio generazione slot: %s", datetime_from_filter)
+    logging.info("data fine generazione slot: %s", datetime_to_filter)
+
+    # tramite la sessione crea la availability_query
+    with Session(engine) as session:
+
+        # Crea la query per gli slot prenotabili
+        logging.info("Esecuzione Query")
+        logging.info(
+        "Parametri: exam_type_id=%s, operator_id=%s, laboratory_id=%s, datetime_from_filter=%s",
+             exam_type_id, operator_id, laboratory_id, datetime_from_filter
+        )
+
+        # Crea la query per gli slot già prenotati
+
+        booked_slots_query = (
+            select(SlotBooking)
+            .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
+            .where(SlotBooking.rejected == False)
+        )
+
+        if datetime_from_filter:
+            booked_slots_query = booked_slots_query.where(SlotBooking.appointment_date >= datetime_from_filter.date())
+        if exam_type_id:
+            booked_slots_query = booked_slots_query.where(OperatorsAvailability.exam_type_id == exam_type_id)
+        if operator_id:
+            booked_slots_query = booked_slots_query.where(OperatorsAvailability.operator_id == operator_id)
+        if laboratory_id:
+            booked_slots_query = booked_slots_query.where(OperatorsAvailability.laboratory_id == laboratory_id)
+
+        booked_slots = session.execute(booked_slots_query).scalars().all()
+
+        # Crea la query per i periodi di chiusura dei laboratori
+        laboratory_closures_query = select(LaboratoryClosure)
+        
+        if datetime_from_filter:
+            laboratory_closures_query = laboratory_closures_query.where(LaboratoryClosure.end_datetime >= datetime_from_filter)
+        if laboratory_id:
+            laboratory_closures_query = laboratory_closures_query.where(LaboratoryClosure.laboratory_id == laboratory_id)
+
+        laboratory_closures = session.execute(laboratory_closures_query).scalars().all()
+
+        # Crea la query per i periodi di assenza degli operatori
+        operator_absences_query  = select(OperatorAbsence)
+
+        if datetime_from_filter:
+            operator_absences_query = operator_absences_query.where(OperatorAbsence.end_datetime >= datetime_from_filter)
+        if operator_id:
+            operator_absences_query = operator_absences_query.where(OperatorAbsence.operator_id == operator_id)
+
+        operator_absences = session.execute(operator_absences_query).scalars().all()
+        
+        availability_query = (
+            select(OperatorsAvailability)
+            .join(Operator, OperatorsAvailability.operator_id == Operator.operator_id)
+            .join(Laboratory, OperatorsAvailability.laboratory_id == Laboratory.laboratory_id)
+            .join(ExamType, OperatorsAvailability.exam_type_id == ExamType.exam_type_id)
+            .where(OperatorsAvailability.enabled == True)
+        )
+
+        if datetime_from_filter:
+            availability_query = availability_query.where(OperatorsAvailability.available_to_date >= datetime_from_filter.date())
+        if exam_type_id:
+            availability_query = availability_query.where(OperatorsAvailability.exam_type_id == exam_type_id)
+        if operator_id:
+            availability_query = availability_query.where(OperatorsAvailability.operator_id == operator_id)
+        if laboratory_id:
+            availability_query = availability_query.where(OperatorsAvailability.laboratory_id == laboratory_id)
+
+        availability = session.execute(availability_query).scalars().all()
+    
+    try:
+        slots = generate_availabile_slots(
+                availability, # disponibilità degli operatori
+                datetime_from_filter, # data di inizio filtro
+                datetime_to_filter, # data di fine filtro          
+                laboratory_closures, # periodi di chiusura dei laboratori
+                operator_absences, # periodi di assenza degli operatori
+                booked_slots # slot già prenotati 
+        )
+
+        logging.info("Slots generated: %s", len(slots))
+  
+        return jsonify(slots), 200
+
+    except Exception as e:
+        logging.error("Error in slot conversion:\n%s", traceback.format_exc())
+        return jsonify({"error": "Slot conversion Error"}), 500

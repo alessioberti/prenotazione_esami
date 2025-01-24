@@ -38,9 +38,8 @@ class Account(Base):
 
     # viene utilizzato uuid in quanto jwt richiede un campo stringa univoco 
     account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,unique=True,nullable=False)
-    username: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     email: Mapped[str] = mapped_column(String(254), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     first_name: Mapped[str] = mapped_column(String(30), nullable=False)
     last_name: Mapped[str] = mapped_column(String(30), nullable=False)
     tel_number: Mapped[str] = mapped_column(String(30))
@@ -190,7 +189,6 @@ def populate_demo_data():
             accounts = [
                 Account(
                     account_id=account_uuids["marco_rossi"],
-                    username="mrossi",
                     password_hash="hashed_password1",
                     email="marco.rossi@example.com",
                     first_name="Marco",
@@ -203,7 +201,6 @@ def populate_demo_data():
                 ),
                 Account(
                     account_id=account_uuids["giulia_verdi"],
-                    username="gverdi",
                     password_hash="hashed_password2",
                     email="giulia.verdi@example.com",
                     first_name="Giulia",
@@ -216,7 +213,6 @@ def populate_demo_data():
                 ),
                 Account(
                     account_id=account_uuids["luca_bianchi"],
-                    username="lbianchi",
                     password_hash="hashed_password3",
                     email="luca.bianchi@example.com",
                     first_name="Luca",
@@ -229,7 +225,6 @@ def populate_demo_data():
                 ),
                 Account(
                     account_id=account_uuids["sara_neri"],
-                    username="sneri",
                     password_hash="hashed_password4",
                     email="sara.neri@example.com",
                     first_name="Sara",
@@ -319,22 +314,22 @@ def populate_demo_data():
             operators = [
                 Operator(
                     operator_id=operator_uuids["francesca_conti"],
-                    name="Francesca Conti",
+                    name="Dott.ssa Francesca Conti",
                     account_id=account_uuids["marco_rossi"],
                 ),
                 Operator(
                     operator_id=operator_uuids["alessandro_ricci"],
-                    name="Alessandro Ricci",
+                    name="Specialista Alessandro Ricci",
                     account_id=account_uuids["giulia_verdi"],
                 ),
                 Operator(
                     operator_id=operator_uuids["luca_bianchi"],
-                    name="Luca Bianchi",
+                    name="Dott. Luca Bianchi",
                     account_id=account_uuids["luca_bianchi"],
                 ),
                 Operator(
                     operator_id=operator_uuids["sara_neri"],
-                    name="Sara Neri",
+                    name="Specialista Sara Neri",
                     account_id=account_uuids["sara_neri"],
                 ),
             ]
@@ -421,14 +416,10 @@ def populate_demo_data():
                 ),
             ]
             session.add_all(availabilities)
-
-            # Commit finale
             session.commit()
-            print("Dati demo inseriti con successo.")
-
     except Exception as e:
-        print(f"Errore durante l'inserimento dei dati: {e}")
+        print(f"Errore durante la generazione dei dati demo: {e}")
+        session.rollback()
 
-
-clear_existing_data()
-populate_demo_data()
+#clear_existing_data()
+#populate_demo_data()

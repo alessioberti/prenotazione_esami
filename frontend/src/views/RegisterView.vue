@@ -30,19 +30,6 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="username" class="label">Username</label>
-                    <input
-                        id="username"
-                        type="text"
-                        v-model="username"
-                        required
-                        maxlength="30"
-                        pattern="^[0-9A-Za-z]{6,30}$"
-                        placeholder="Inserisci username"
-                        class="button-generic"
-                    />
-                </div>
-                <div class="form-group">
                     <label for="email" class="label">Email</label>
                     <input
                         id="email"
@@ -109,7 +96,6 @@ import api from '../composables/useApi';
 
 const router = useRouter();
 
-const username = ref('');
 const email = ref('');
 const password = ref('');
 const confirmPassword = ref('');
@@ -132,7 +118,6 @@ const handleRegister = async () => {
         loading.value = true;
 
         const response = await api.post('/register', {
-            username: username.value,
             email: email.value,
             password: password.value,
             tel_number: telNumber.value,
