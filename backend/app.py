@@ -83,7 +83,9 @@ BLOCKLIST = set()
 def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
     is_blocked = jti in BLOCKLIST
-    logging.info(f"Verifica blocklist per JTI {jti}: {'Bloccato' if is_blocked else 'Non bloccato'}")
+    if is_blocked:
+        logging.info(f"Token {jti} in blocklist")
+
     return is_blocked
 
 @app.post("/register")
@@ -314,15 +316,23 @@ def book_slot():
         appointment_time_end = time.fromisoformat(slot["operator_availability_slot_end"])
         appointment_date = date.fromisoformat(slot["operator_availability_date"])
         availability_id = UUID(slot.get("availability_id"))
-        exam_type_id = UUID(slot.get("exam_type_id"))
-        operator_id = UUID(slot.get("operator_id"))
-        laboratory_id = UUID(slot.get("laboratory_id"))
     except (KeyError, ValueError):
         return jsonify({"error": "Missing key or invalid value format"}), 400
 
     # Transazione atomica per verifiche e inserimento di un nuovo slot
     with Session(engine) as session:
         try:
+
+            # deriva i dati dell'operatore, del laboratorio e del tipo di esame dalle disponibilità
+            availability_query = (
+                select(OperatorsAvailability)
+                .where(OperatorsAvailability.availability_id == availability_id)
+            )
+            availability = session.execute(availability_query).scalars().first()
+
+            laboratory_id = availability.laboratory_id
+            operator_id = availability.operator_id
+            exam_type_id = availability.exam_type_id
 
             # Verifica se l'utente ha già raggiunto il numero massimo di prenotazioni
             user_bookings_query = (
@@ -333,7 +343,8 @@ def book_slot():
             if len(session.execute(user_bookings_query).scalars().all()) >= MAX_BOOKINGS_PER_USER:
                 return jsonify({"error": "Max bookings reached"}), 403
 
-            # Verifica se l'utente ha già prenotato lo stesso tipo di esame
+            # Verifica se l'utente ha già prenotato lo stesso tipo di esame anche di un altra disponibilità
+            # o altro laboratorio o altro operatore
             same_exam_booked_query = (
                 select(SlotBooking)
                 .join(OperatorsAvailability, SlotBooking.availability_id == OperatorsAvailability.availability_id)
@@ -341,6 +352,7 @@ def book_slot():
                 .where(SlotBooking.account_id == current_user)
                 .where(OperatorsAvailability.exam_type_id == exam_type_id)
             )
+
             if session.execute(same_exam_booked_query).scalars().first():
                 return jsonify({"error": "Exam type already booked"}), 403
 
@@ -351,6 +363,7 @@ def book_slot():
                 .where(LaboratoryClosure.start_datetime <= datetime.combine(appointment_date, appointment_time_start))
                 .where(LaboratoryClosure.end_datetime > datetime.combine(appointment_date, appointment_time_start))
             )
+
             if session.execute(laboratory_closure_query).scalars().first():
                 return jsonify({"error": "Laboratory closed"}), 409
 
@@ -575,20 +588,20 @@ def get_slots_availability():
 
         availability = session.execute(availability_query).scalars().all()
     
-    try:
-        slots = generate_availabile_slots(
+        try:
+            slots = generate_availabile_slots(
                 availability, # disponibilità degli operatori
                 datetime_from_filter, # data di inizio filtro
                 datetime_to_filter, # data di fine filtro          
                 laboratory_closures, # periodi di chiusura dei laboratori
                 operator_absences, # periodi di assenza degli operatori
                 booked_slots # slot già prenotati 
-        )
+            )
 
-        logging.info("Slots generated: %s", len(slots))
+            logging.info("Slots generated: %s", len(slots))
   
-        return jsonify(slots), 200
+            return jsonify(slots), 200
 
-    except Exception as e:
-        logging.error("Error in slot conversion:\n%s", traceback.format_exc())
+        except Exception as e:
+            logging.error("Error in slot conversion:\n%s", traceback.format_exc())
         return jsonify({"error": "Slot conversion Error"}), 500

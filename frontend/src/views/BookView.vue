@@ -203,8 +203,9 @@ async function confirmBooking() {
       operator_availability_date: selectedSlot.value.operator_availability_date,
       operator_availability_slot_start: selectedSlot.value.operator_availability_slot_start,
       operator_availability_slot_end: selectedSlot.value.operator_availability_slot_end,
-      exam_type_id: examTypeId.value,
+      //exam_type_id: examTypeId.value,
     });
+    
 
     alert('Prenotazione effettuata con successo!');
     showConfirmModal.value = false;
