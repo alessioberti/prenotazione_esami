@@ -1,275 +1,182 @@
 <template>
-  <div class="slots-page">
-    <h2 class="title-page">Disponibilità Esame</h2>
+  <div class="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md">
+    <h2 class="text-2xl font-bold mb-6 text-center">Disponibilità Esame</h2>
 
-    <!-- Sezione filtri -->
-    <div class="filters">
-      <label>Operatore:</label>
-      <select v-model="selectedOperator">
-        <option value="">-- Tutti --</option>
-        <option v-for="op in operators" :key="op.operator_id" :value="op.operator_id">
-          {{ op.name }}
-        </option>
-      </select>
+    <!-- Filtri -->
+    <div class="flex flex-wrap gap-4 mb-6">
+      <div>
+        <label for="operator" class="block text-sm font-medium text-gray-700">Operatore</label>
+        <select
+          id="operator"
+          v-model="selectedOperatorId"
+          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          @change="applyFilters"
+        >
+          <option value="">-- Tutti --</option>
+          <option v-for="operator in operators" :key="operator.id" :value="operator.id">
+            {{ operator.name }}
+          </option>
+        </select>
+      </div>
 
-      <label>Laboratorio:</label>
-      <select v-model="selectedLaboratory">
-        <option value="">-- Tutti --</option>
-        <option v-for="lab in labs" :key="lab.laboratory_id" :value="lab.laboratory_id">
-          {{ lab.name }}
-        </option>
-      </select>
+      <div>
+        <label for="laboratory" class="block text-sm font-medium text-gray-700">Laboratorio</label>
+        <select
+          id="laboratory"
+          v-model="selectedLaboratoryId"
+          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          @change="applyFilters"
+        >
+          <option value="">-- Tutti --</option>
+          <option v-for="laboratory in labs" :key="laboratory.id" :value="laboratory.id">
+            {{ laboratory.name }}
+          </option>
+        </select>
+      </div>
 
-      <label>Da:</label>
-      <input type="date" v-model="fromDate" />
+      <div>
+        <label for="fromDate" class="block text-sm font-medium text-gray-700">Da</label>
+        <input
+          id="fromDate"
+          type="date"
+          v-model="fromDate"
+          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          @change="applyFilters"
+        />
+      </div>
 
-      <label>A:</label>
-      <input type="date" v-model="toDate" />
-
-      <button @click="applyFilters">Applica Filtri</button>
-      <button @click="goBack">Indietro</button>
+      <div>
+        <label for="toDate" class="block text-sm font-medium text-gray-700">A</label>
+        <input
+          id="toDate"
+          type="date"
+          v-model="toDate"
+          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          @change="applyFilters"
+        />
+      </div>
     </div>
 
-    <hr />
-
-    <!-- Visualizzazione slot -->
-    <div v-if="paginatedSlots.length === 0">
-      <p>Nessuno slot trovato.</p>
-    </div>
-    <ul v-else>
-      <li v-for="slot in paginatedSlots" :key="slot.operator_availability_slot_start" class="item-list">
-        <div @click="openConfirmModal(slot)" class="flex justify-between w-full">
-          <div class="flex min-w-0 gap-x-4">
-            <div class="min-w-0 flex-auto text-left">
-              <p class="text-sm/6 font-semibold text-gray-900">
-                <strong class="mr-4">{{ slot.operator_availability_date }}</strong>
-
-                {{ slot.operator_availability_slot_start }}
-                →
-                {{ slot.operator_availability_slot_end }}
-              </p>
-              <p class="mt-1 truncate text-xs/5 text-gray-500">{{ slot.operator_name }}</p>
-              <!--  <span > - {{ slot.laboratory_name }}</span>   -->
-            </div>
-          </div>
-          <div class="hidden shrink-0 sm:flex sm:flex-col sm:items-end text-sm/6 font-semibold text-gray-900">
-            {{ slot.laboratory_name }}
-          </div>
+    <!-- Lista slot -->
+    <div v-if="paginatedSlots.length === 0" class="text-center text-gray-500">Nessuno slot trovato.</div>
+    <ul v-else role="list" class="divide-y divide-gray-200">
+      <li
+        v-for="slot in paginatedSlots"
+        :key="slot.operator_availability_slot_start"
+        @click="openConfirmModal(slot)"
+        class="cursor-pointer py-4 px-6 flex justify-between hover:bg-gray-100 rounded-md"
+      >
+        <div>
+          <p class="text-sm font-semibold text-gray-900">
+            <strong class="mr-4">{{ slot.operator_availability_date }}</strong>
+            {{ slot.operator_availability_slot_start }} → {{ slot.operator_availability_slot_end }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500">{{ slot.operator_name }}</p>
         </div>
+        <div class="text-sm text-gray-500">{{ slot.laboratory_name }}</div>
       </li>
     </ul>
 
     <!-- Paginazione -->
-    <div class="pagination" v-if="totalPages > 1">
-      <button @click="prevPage" :disabled="currentPage === 1">Prev</button>
-      <span>Pagina {{ currentPage }} di {{ totalPages }}</span>
-      <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
-    </div>
-
-    <!-- Modale di conferma prenotazione -->
-    <div v-if="showConfirmModal" class="modal-overlay">
-      <div class="modal-content">
-        <h3>Conferma Prenotazione</h3>
-        <p>
-          <strong>Data:</strong>
-          {{ selectedSlot?.operator_availability_date }}
-        </p>
-        <p>
-          <strong>Orario:</strong>
-          {{ selectedSlot?.operator_availability_slot_start }} →
-          {{ selectedSlot?.operator_availability_slot_end }}
-        </p>
-        <p>
-          <strong>Operatore:</strong> {{ selectedSlot?.operator_name }}<br />
-          <strong>Laboratorio:</strong> {{ selectedSlot?.laboratory_name }}
-        </p>
-        <button @click="confirmBooking">Conferma</button>
-        <button @click="cancelBooking">Annulla</button>
-        <p v-if="errorMessage" style="color: red">{{ errorMessage }}</p>
-      </div>
+    <div class="flex justify-between items-center mt-6" v-if="totalPages > 1">
+      <button
+        @click="prevPage"
+        :disabled="currentPage === 1"
+        class="px-4 py-2 text-sm font-semibold text-white bg-gray-600 rounded-md hover:bg-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:bg-gray-300"
+      >
+        Precedente
+      </button>
+      <span class="text-sm text-gray-600">Pagina {{ currentPage }} di {{ totalPages }}</span>
+      <button
+        @click="nextPage"
+        :disabled="currentPage === totalPages"
+        class="px-4 py-2 text-sm font-semibold text-white bg-gray-600 rounded-md hover:bg-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:bg-gray-300"
+      >
+        Successivo
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import api from '../composables/useApi';
 
-const route = useRoute();
-const router = useRouter();
-
-// Filtri e stato degli slot
-const examTypeId = ref(route.query.exam_type_id || '');
+// Stato del componente
 const operators = ref([]);
-const selectedOperator = ref('');
 const labs = ref([]);
-const selectedLaboratory = ref('');
-const toDate = ref('');
-const fromDate = ref(route.query.date_from || '');
 const slots = ref([]);
+const selectedOperatorId = ref('');
+const selectedLaboratoryId = ref('');
+const fromDate = ref('');
+const toDate = ref('');
 const currentPage = ref(1);
 const pageSize = 10;
 
-// Variabili per modale e messaggi
-const showConfirmModal = ref(false);
-const selectedSlot = ref(null);
-const errorMessage = ref('');
+// Ottieni l'id dell'esame dalla query string
+const route = useRoute();
+const examTypeId = ref(route.query.exam_type_id || '');
 
 onMounted(async () => {
-  if (!examTypeId.value) {
-    console.error('Nessun exam_type_id specificato!');
-    return;
-  }
-  await fetchFilters();
-  await fetchSlots();
+  await fetchSlotsAndFilters();
 });
 
-async function fetchFilters() {
-  try {
-    const opResponse = await api.get('/operators', { params: { exam_id: examTypeId.value } });
-    operators.value = opResponse.data;
-
-    const labResponse = await api.get('/laboratories', { params: { exam_id: examTypeId.value } });
-    labs.value = labResponse.data;
-  } catch (err) {
-    console.error('Errore caricamento filtri:', err);
-  }
-}
-
-async function fetchSlots() {
+// Funzione per caricare gli slot e i filtri
+async function fetchSlotsAndFilters() {
+  console.log('Valore di examTypeId:', examTypeId.value);
   try {
     const params = {
       exam_type_id: examTypeId.value,
-      operator_id: selectedOperator.value || undefined,
-      laboratory_id: selectedLaboratory.value || undefined,
+      operator_id: selectedOperatorId.value || undefined,
+      laboratory_id: selectedLaboratoryId.value || undefined,
       datetime_from_filter: fromDate.value || undefined,
       datetime_to_filter: toDate.value || undefined,
     };
+
     const response = await api.get('/slots_availability', { params });
-    slots.value = response.data;
+
+    // Popola gli slot
+    slots.value = response.data.slots || [];
+
+    // Popola gli operatori
+    operators.value = response.data.operators || [];
+
+    // Popola i laboratori
+    labs.value = response.data.laboratories || [];
   } catch (err) {
-    console.error('Errore caricamento slots:', err);
+    console.error('Errore durante il caricamento dei dati:', err);
     slots.value = [];
-    errorMessage.value = 'Errore durante il caricamento degli slot';
+    operators.value = [];
+    labs.value = [];
   }
 }
 
+// Applica i filtri
 function applyFilters() {
   currentPage.value = 1;
-  fetchSlots();
+  fetchSlotsAndFilters();
 }
 
-const totalPages = computed(() => {
-  if (!slots.value) return 1;
-  return Math.ceil(slots.value.length / pageSize);
-});
-
+// Funzioni per la paginazione
+const totalPages = computed(() => Math.ceil(slots.value.length / pageSize));
 const paginatedSlots = computed(() => {
   const startIndex = (currentPage.value - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  return slots.value.slice(startIndex, endIndex);
+  return slots.value.slice(startIndex, startIndex + pageSize);
 });
 
 function prevPage() {
-  if (currentPage.value > 1) {
-    currentPage.value--;
-  }
+  if (currentPage.value > 1) currentPage.value--;
 }
 
 function nextPage() {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++;
-  }
-}
-
-function goBack() {
-  router.back();
+  if (currentPage.value < totalPages.value) currentPage.value++;
 }
 
 function openConfirmModal(slot) {
-  selectedSlot.value = slot;
-  showConfirmModal.value = true;
-  errorMessage.value = '';
-}
-
-async function confirmBooking() {
-  if (!selectedSlot.value) return;
-
-  errorMessage.value = '';
-  try {
-    await api.post('/book_slot', {
-      availability_id: selectedSlot.value.operator_availability_id,
-      operator_availability_date: selectedSlot.value.operator_availability_date,
-      operator_availability_slot_start: selectedSlot.value.operator_availability_slot_start,
-      operator_availability_slot_end: selectedSlot.value.operator_availability_slot_end,
-      //exam_type_id: examTypeId.value,
-    });
-    
-
-    alert('Prenotazione effettuata con successo!');
-    showConfirmModal.value = false;
-    selectedSlot.value = null;
-    router.push({ name: 'manage' });
-  } catch (err) {
-    console.error('Errore prenotazione slot:', err);
-    if (err.response?.status === 409) {
-      errorMessage.value = 'Risulta una prenotazione attiva per questo esame';
-    } else {
-      errorMessage.value = err.response?.data?.error || 'Si è verificato un errore durante la prenotazione.';
-    }
-    await fetchSlots();
-  }
-}
-
-function cancelBooking() {
-  showConfirmModal.value = false;
-  selectedSlot.value = null;
-  errorMessage.value = '';
+  console.log('Slot selezionato:', slot);
 }
 </script>
 
-<style scoped>
-.slots-page {
-  width: 90%;
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
-.filters {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-
-.slot-item {
-  border: 1px solid #ccc;
-  padding: 8px;
-  margin: 6px 0;
-}
-
-.pagination {
-  margin-top: 1rem;
-  text-align: center;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-content {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 5px;
-  max-width: 400px;
-}
+<style>
 </style>

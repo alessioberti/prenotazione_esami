@@ -1,77 +1,35 @@
 <template>
-  <nav class="navbar">
-    <router-link to="/" class="logo">Logo</router-link>
-    <ul class="nav-links">
+  <nav class="flex justify-between items-center px-4 py-2 bg-gray-800 text-white">
+    <router-link to="/" class="font-bold text-xl">Logo</router-link>
+    <ul class="flex list-none gap-4">
       <template v-if="isLoggedIn">
-        <li><router-link to="/">Home</router-link></li>
-        <li><router-link to="/manage">Prenotazioni</router-link></li>
         <li>
-          <router-link to="/account" class="username">{{ userInfo?.username }}</router-link>
-          <button @click="handleLogout" class="logout-btn">Logout</button>
+          <router-link to="/" class="hover:underline">Home</router-link>
+        </li>
+        <li>
+          <router-link to="/manage" class="hover:underline">Prenotazioni</router-link>
+        </li>
+        <li class="flex items-center gap-2">
+          <router-link to="/account" class="hover:underline">Gestione Account</router-link>
         </li>
       </template>
       <template v-else>
-        <li><router-link to="/">Home</router-link></li>
-        <li><router-link to="/login">Login</router-link></li>
+        <li>
+          <router-link to="/" class="hover:underline">Home</router-link>
+        </li>
+        <li>
+          <router-link to="/login" class="hover:underline">Login</router-link>
+        </li>
       </template>
     </ul>
   </nav>
 </template>
 
 <script setup>
-import { useAuth } from '../composables/useAuth'
+import { useAuth } from '../composables/useAuth';
 
-const { isLoggedIn, userInfo, logout } = useAuth() 
-
-const handleLogout = async () => {
-  await logout()
-}
+const { isLoggedIn, userInfo } = useAuth();
 </script>
 
-<style scoped>
-.navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background-color: #333;
-  color: white;
-}
-
-.nav-links {
-  list-style: none;
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-links li {
-  display: inline;
-}
-
-.nav-links a {
-  color: white;
-  text-decoration: none;
-}
-
-.logout-btn {
-  background: none;
-  border: none;
-  color: white;
-  cursor: pointer;
-}
-
-.logo {
-  font-weight: bold;
-  font-size: 1.5rem;
-}
-
-.username {
-  color: white;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.username:hover {
-  text-decoration: none;
-}
+<style>
 </style>

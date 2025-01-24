@@ -71,7 +71,7 @@ class LaboratoryClosure(Base):
     __tablename__ = "laboratory_closures"
 
     closure_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,unique=True,nullable=False)
-    laboratory_id: Mapped[str] = mapped_column(ForeignKey("laboratories.laboratory_id"), nullable=False)
+    laboratory_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("laboratories.laboratory_id"), nullable=False)
     start_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     end_datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
@@ -93,7 +93,7 @@ class Operator(Base):
 
     operator_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,unique=True,nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    account_id: Mapped[str] = mapped_column(ForeignKey("account.account_id"), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("account.account_id"), nullable=False)
 
     # Relazioni
     account: Mapped["Account"] = relationship(back_populates="operator")
@@ -422,4 +422,4 @@ def populate_demo_data():
         session.rollback()
 
 #clear_existing_data()
-#populate_demo_data()
+populate_demo_data()

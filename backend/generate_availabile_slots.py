@@ -13,7 +13,7 @@ def add_minutes_to_time(original_time, minutes_to_add):
 def slot_is_booked(operator_availability_id, operator_availability_date, operator_availability_slot_start, operator_availability_slot_end, booked_slots):
     for booked_slot in booked_slots:
         if (
-            operator_availability_id == booked_slot.availability_id and 
+            str(operator_availability_id) == str(booked_slot.availability_id) and 
             operator_availability_date == booked_slot.appointment_date and
             operator_availability_slot_start == booked_slot.appointment_time_start
         ):
@@ -23,7 +23,7 @@ def slot_is_booked(operator_availability_id, operator_availability_date, operato
 #funzione per verificare se uno slot è in un periodo di chiusura di un laboratorio 
 def lab_is_closed(laboratory_id, operator_availability_date, operator_availability_slot_start, operator_availability_slot_end, laboratory_closures):
     for laboratory_closure in laboratory_closures:
-        if laboratory_id == laboratory_closure.laboratory_id:
+        if str(laboratory_id) == str(laboratory_closure.laboratory_id):
             if datetime.combine(operator_availability_date, operator_availability_slot_start) < laboratory_closure.end_datetime and datetime.combine(operator_availability_date, operator_availability_slot_end) > laboratory_closure.start_datetime :
                 return True
     return False
@@ -31,7 +31,7 @@ def lab_is_closed(laboratory_id, operator_availability_date, operator_availabili
 #funzione per verificare se uno slot è in un periodo di assenza di un operatore 
 def operator_is_absent(operator_id, operator_availability_date ,operator_availability_slot_start, operator_availability_slot_end, operator_absences):
     for operator_absence in operator_absences:
-        if operator_id == operator_absence.operator_id:
+        if str(operator_id) == str(operator_absence.operator_id):
             if datetime.combine(operator_availability_date, operator_availability_slot_start) < operator_absence.end_datetime and datetime.combine(operator_availability_date, operator_availability_slot_end) > operator_absence.start_datetime :
                 return True
     return False
@@ -41,7 +41,14 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
     
     operators_availability_slots = []
     
+    # crea una lista di operatori, laboratori e slot disponibili da usare come metadati per filtrare i risultati
+    operator_list = []
+    laboratory_list = []
+
     for operator_availability in operators_availability:
+
+        operator_list.append({ "id": str(operator_availability.operator_id), "name": operator_availability.operator.name })
+        laboratory_list.append({ "id": str(operator_availability.laboratory_id), "name": operator_availability.laboratory.name })
 
         logging.info(
             "Processo availability_id=%s, dal %s al %s, weekday=%d",
@@ -76,13 +83,13 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
                 # se lo slot supera l'orario esci e passa alla settimana successiva
                 if operator_availability_slot_end > operator_availability.available_to_time:
                    break
-                
+
                 # crea lo slot come oggetto dictonary
                 slot = {
                     "operator_availability_id": operator_availability.availability_id,
-                    #"exam_type_id": str(operator_availability.exam_type_id),
-                    #"laboratory_id": str(operator_availability.laboratory_id),
-                    #"operator_id": str(operator_availability.operator_id),
+                    "exam_type_id": str(operator_availability.exam_type_id),
+                    "laboratory_id": str(operator_availability.laboratory_id),
+                    "operator_id": str(operator_availability.operator_id),
                     "exam_type_name": operator_availability.exam_type.name,
                     "laboratory_name": operator_availability.laboratory.name,
                     "operator_name": operator_availability.operator.name,
@@ -106,4 +113,9 @@ def generate_availabile_slots(operators_availability, datetime_from_filter = Non
             # passa alla settimana successiva
             operator_availability_date += timedelta(days=7)
 
-    return operators_availability_slots
+
+    return {
+        "operators": list({v['id']:v for v in operator_list}.values()),
+        "laboratories": list({v['id']:v for v in laboratory_list}.values()),
+        "slots": operators_availability_slots
+    }

@@ -88,6 +88,31 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
 
     return is_blocked
 
+def get_availability_query(session: Session, filters: dict = None):
+    filters = filters or {}
+    query = (
+        select(OperatorsAvailability)
+        .join(Operator, OperatorsAvailability.operator_id == Operator.operator_id)
+        .join(Laboratory, OperatorsAvailability.laboratory_id == Laboratory.laboratory_id)
+        .join(ExamType, OperatorsAvailability.exam_type_id == ExamType.exam_type_id)
+        .where(OperatorsAvailability.enabled == True)
+    )
+
+    # Applica filtri opzionali
+    if filters.get("exam_id"):
+        query = query.where(OperatorsAvailability.exam_type_id == filters["exam_id"])
+    if filters.get("operator_id"):
+        query = query.where(OperatorsAvailability.operator_id == filters["operator_id"])
+    if filters.get("laboratory_id"):
+        query = query.where(OperatorsAvailability.laboratory_id == filters["laboratory_id"])
+    if filters.get("datetime_from"):
+        query = query.where(OperatorsAvailability.available_to_date >= filters["datetime_from"].date())
+    if filters.get("datetime_to"):
+        query = query.where(OperatorsAvailability.available_from_date <= filters["datetime_to"].date())
+
+    return query
+
+
 @app.post("/register")
 def register():
  
@@ -208,49 +233,15 @@ def logout():
         logging.error(f"Errore durante il logout: {e}")
         return jsonify({"error": "Errore durante il logout"}), 500
 
-@app.get("/operators")
-@jwt_required()
-def get_operators():
-
-    try:
-        exam_id = request.args.get("exam_id")
-        laboratory_id = request.args.get("laboratory_id")
-
-        if exam_id:
-            exam_id = UUID(exam_id)
-        if laboratory_id:
-            laboratory_id = UUID(laboratory_id)
-
-    except (ValueError):
-        return jsonify({"error": "Invalid UUID Format"}), 400
-
-    with Session(engine) as session:
-        
-        operators_query = select(Operator).join(OperatorsAvailability, OperatorsAvailability.operator_id == Operator.operator_id).distinct()
-
-        if exam_id:
-            operators_query = operators_query.where(OperatorsAvailability.exam_type_id == exam_id)
-        if laboratory_id:
-            operators_query = operators_query.where(OperatorsAvailability.laboratory_id == laboratory_id)  
-
-        operators = session.execute(operators_query).scalars().all()
-
-        operators_list = []
-        for operator in operators:
-            operators_list.append({
-                "operator_id": str(operator.operator_id),
-                "name": operator.name
-            })
-
-    return jsonify(operators_list), 200
-
 @app.get("/exam_types")
 @jwt_required()
 def get_exam_types():
-
     with Session(engine) as session:
+        
+        offset = int(request.args.get('offset', 0))
+        limit = int(request.args.get('limit', 10))
 
-        exam_types_query = select(ExamType)
+        exam_types_query = select(ExamType).offset(offset).limit(limit)
         exam_types = session.execute(exam_types_query).scalars().all()
 
         exam_types_list = []
@@ -262,44 +253,6 @@ def get_exam_types():
             })
 
     return jsonify(exam_types_list), 200
-
-@app.get("/laboratories")
-@jwt_required()
-def get_laboratories():
-    
-    try:
-        exam_id = request.args.get("exam_id")
-        operator_id = request.args.get("operator_id")
-
-        if exam_id:
-            exam_id = UUID(exam_id)
-        if operator_id:
-            operator_id = UUID(operator_id)
-    except (ValueError):
-        return jsonify({"error": "Invalid UUID Format"}), 400
-    
-
-    with Session(engine) as session:
-        
-        laboratories_query = select(Laboratory).join(OperatorsAvailability, Laboratory.laboratory_id == OperatorsAvailability.laboratory_id).distinct()
-
-        if exam_id:
-            laboratories_query = laboratories_query.where(OperatorsAvailability.exam_type_id == exam_id)
-        if operator_id:
-            laboratories_query = laboratories_query.where(OperatorsAvailability.operator_id == operator_id)
-
-        laboratories = session.execute(laboratories_query).scalars().all()
-
-        labs_list = []
-        for laboratory in laboratories:
-            labs_list.append({
-                "laboratory_id": str(laboratory.laboratory_id),
-                "name": laboratory.name,
-                "address": laboratory.address,
-                "contact_info": laboratory.contact_info
-            })
-
-    return jsonify(labs_list), 200
 
 @app.post("/book_slot")
 @jwt_required()
@@ -485,7 +438,6 @@ def reject_booked_slot(appointment_id):
 def get_slots_availability():
 
     # Imposta i valori di default per i filtri dalla data di oggi a 60 giorni avanti
-    
     first_reservation_datetime = datetime.combine((datetime.now() + timedelta(days=1)).date(), time(0, 0))
     last_reservation_datetime = datetime.combine((datetime.now() + timedelta(days=MAX_DAYS_BOOK_FORWARD)).date(), time(0, 0))
 
@@ -503,14 +455,13 @@ def get_slots_availability():
             datetime_to_filter = last_reservation_datetime 
 
     # se i filtri opzionali vengono passati in un formato non valido, restituisci un errore    
-
-        exam_type_id = request.args.get('exam_type_id', type=int)
+        exam_type_id = request.args.get('exam_type_id')
         if exam_type_id:
             exam_type_id = UUID(exam_type_id)
-        operator_id = request.args.get('operator_id', type=int)
+        operator_id = request.args.get('operator_id')
         if operator_id:
             operator_id = UUID(operator_id)
-        laboratory_id = request.args.get('laboratory_id', type=int)
+        laboratory_id = request.args.get('laboratory_id')
         if laboratory_id:
             laboratory_id = UUID(laboratory_id)
 
@@ -526,8 +477,8 @@ def get_slots_availability():
         # Crea la query per gli slot prenotabili
         logging.info("Esecuzione Query")
         logging.info(
-        "Parametri: exam_type_id=%s, operator_id=%s, laboratory_id=%s, datetime_from_filter=%s",
-             exam_type_id, operator_id, laboratory_id, datetime_from_filter
+        "Parametri: exam_type_id=%s, operator_id=%s, laboratory_id=%s, datetime_from_filter=%s, datetime_to_filter=%s",
+             exam_type_id, operator_id, laboratory_id, datetime_from_filter, datetime_to_filter
         )
 
         # Crea la query per gli slot già prenotati
@@ -545,7 +496,7 @@ def get_slots_availability():
         if operator_id:
             booked_slots_query = booked_slots_query.where(OperatorsAvailability.operator_id == operator_id)
         if laboratory_id:
-            booked_slots_query = booked_slots_query.where(OperatorsAvailability.laboratory_id == laboratory_id)
+            booked_slots_query = booked_slots_query.where((OperatorsAvailability.laboratory_id) == (laboratory_id))
 
         booked_slots = session.execute(booked_slots_query).scalars().all()
 
@@ -575,7 +526,7 @@ def get_slots_availability():
             .join(Laboratory, OperatorsAvailability.laboratory_id == Laboratory.laboratory_id)
             .join(ExamType, OperatorsAvailability.exam_type_id == ExamType.exam_type_id)
             .where(OperatorsAvailability.enabled == True)
-        )
+        )   
 
         if datetime_from_filter:
             availability_query = availability_query.where(OperatorsAvailability.available_to_date >= datetime_from_filter.date())
@@ -587,7 +538,9 @@ def get_slots_availability():
             availability_query = availability_query.where(OperatorsAvailability.laboratory_id == laboratory_id)
 
         availability = session.execute(availability_query).scalars().all()
-    
+        
+        logging.info("DEBUG: Availability fetched: %s", len(availability))
+
         try:
             slots = generate_availabile_slots(
                 availability, # disponibilità degli operatori
@@ -595,10 +548,10 @@ def get_slots_availability():
                 datetime_to_filter, # data di fine filtro          
                 laboratory_closures, # periodi di chiusura dei laboratori
                 operator_absences, # periodi di assenza degli operatori
-                booked_slots # slot già prenotati 
+                booked_slots # slot già prenotati
             )
 
-            logging.info("Slots generated: %s", len(slots))
+            logging.info("Slots generated: %s", len(slots['slots']))
   
             return jsonify(slots), 200
 
